@@ -1,0 +1,29 @@
+{% extends "base_panel.html" %}
+{% block content %}
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-6">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">Import Hosts (Excel)</h1>
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <div class="mb-3">
+              <label class="form-label">Select Excel File</label>
+              <input type="file" name="file" class="form-control" accept=".xlsx" required>
+              <small class="text-muted">
+                Format: <br>
+                <b>Column A:</b> Host Name<br>
+                <b>Column B:</b> Phone (optional)
+              </small>
+            </div>
+            <button type="submit" class="btn btn-primary">Import</button>
+            <a href="{% url 'hosts' %}" class="btn btn-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

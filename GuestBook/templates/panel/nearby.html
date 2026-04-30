@@ -1,0 +1,102 @@
+{% extends 'base_panel.html' %}
+{% block content %}
+
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="title-single-box">
+          <br>
+          <br>
+          <br>
+          <h1 class="title-single">Nearby Persons</h1>
+          <br>
+
+          <div class="table-responsive">
+            <table class="table table-bordered table-hover text-center align-middle">
+              <thead class="thead-dark">
+                <tr>
+                  <th>#</th>
+                  <th>Visitor</th>
+                  <th>Company</th>
+                  <th>Host name</th>
+                  <th>ID</th>
+                  <th>Start</th>
+                  <th>Status</th>
+                    <th>Send</th>
+                    <th>Print</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for g in guests %}
+                  <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ g.first_name }} {{ g.last_name }}</td>
+                    <td>
+  {% if g.factory %}
+    {{ g.factory.company_name }}
+  {% elif g.company_name_text %}
+    {{ g.company_name_text }}
+  {% else %}
+    <span class="text-muted">No company</span>
+  {% endif %}
+</td>
+
+                    <td>{{ g.host.host_name }}</td>
+                    <td>{{ g.visitor_id }}</td>
+                    <td>{{ g.start_time|date:"d.m.Y, H:i" }}</td>
+                    <td><span class="badge badge-warning">Open</span></td>
+                    <td>
+  {% if g.sms_status == "sent" %}
+    <span class="badge bg-success">OK</span>
+  {% elif g.sms_status == "timeout" %}
+    <span class="badge bg-warning text-dark">Timeout</span>
+  {% elif g.sms_status == "error" %}
+    <span class="badge bg-danger">Error</span>
+  {% elif g.sms_status == "skipped" %}
+    <span class="badge bg-secondary">Skipped</span>
+  {% else %}
+    <span class="badge bg-light text-dark">Pending</span>
+  {% endif %}
+</td>
+<td>
+  {% if g.print_status == "printed" %}
+    <span class="badge bg-success">OK</span>
+  {% elif g.print_status == "timeout" %}
+    <span class="badge bg-warning text-dark">Timeout</span>
+  {% elif g.print_status == "error" %}
+    <span class="badge bg-danger">Error</span>
+  {% elif g.print_status == "skipped" %}
+    <span class="badge bg-secondary">Skipped</span>
+  {% else %}
+    <span class="badge bg-light text-dark">Pending</span>
+  {% endif %}
+</td>
+
+
+                    <td>
+  {% if g.visitor_id|length <= 3 %}
+    <a href="{% url 'mark_returned' g.id %}" class="btn btn-outline-danger btn-sm">
+      Returned ID
+    </a>
+  {% else %}
+    <!-- brak przycisku dla chipów -->
+    <span class="text-muted">—</span>
+  {% endif %}
+</td>
+                  </tr>
+                {% empty %}
+                  <tr><td colspan="8">No people present</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

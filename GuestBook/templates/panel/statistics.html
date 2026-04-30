@@ -1,0 +1,181 @@
+{% extends 'base_panel.html' %}
+{% block content %}
+<br><br><br>
+<section class="intro-single">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-12">
+        <div class="title-single-box">
+          <h1 class="title-single">Statistics</h1>
+          <br>
+
+          <!-- 📊 Pierwsza linia (standardowe liczniki) -->
+          <div class="row text-center">
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-primary text-white">
+                <div class="card-body">
+                  <h5 class="card-title">Today</h5>
+                  <p class="display-5 fw-bold">{{ day }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-success text-white">
+                <div class="card-body">
+                  <h5 class="card-title">This Week</h5>
+                  <p class="display-5 fw-bold">{{ week }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-warning text-white">
+                <div class="card-body">
+                  <h5 class="card-title">This Month</h5>
+                  <p class="display-5 fw-bold">{{ month }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 📊 Druga linia (statusy) -->
+          <div class="row text-center">
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-info text-white">
+                <div class="card-body">
+                  <h6 class="card-title">Currently Present</h6>
+                  <p class="display-6 fw-bold">{{ current_visitors }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-danger text-white">
+                <div class="card-body">
+                  <h6 class="card-title">On Production Now</h6>
+                  <p class="display-6 fw-bold">{{ production_now }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0 bg-success text-white">
+                <div class="card-body">
+                  <h6 class="card-title">Finished</h6>
+                  <p class="display-6 fw-bold">{{ finished }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 🔝 Najczęstsze dane -->
+          <div class="row text-center">
+            <div class="col-md-6 mb-4">
+              <div class="card shadow-sm border-0">
+                <div class="card-body">
+                  <h6 class="card-title text-muted">Top Purpose (This Month)</h6>
+                  <p class="display-6 text-primary fw-bold">{{ top_purpose }}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6 mb-4">
+              <div class="card shadow-sm border-0">
+                <div class="card-body">
+                  <h6 class="card-title text-muted">Most Visited Host</h6>
+                  <p class="display-6 text-primary fw-bold">{{ top_host }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 📅 Rezerwacje (zostaje jako kafelek) -->
+          <div class="row text-center">
+            <div class="col-md-12 mb-4">
+              <div class="card shadow-sm border-0 bg-dark text-white">
+                <div class="card-body">
+                  <h6 class="card-title">Upcoming Reservations</h6>
+                  <p class="display-5 fw-bold">{{ upcoming_reservations }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <hr>
+          <h3 class="mb-4">Charts Overview</h3>
+          <div class="row">
+            <!-- Kołowy: Status wizyt -->
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0">
+                <div class="card-body">
+                  <h6 class="card-title text-center">Visits by Status</h6>
+                  <canvas id="statusChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- Kołowy: Production -->
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0">
+                <div class="card-body">
+                  <h6 class="card-title text-center">Production vs Non-production</h6>
+                  <canvas id="productionChart"></canvas>
+                </div>
+              </div>
+            </div>
+
+            <!-- ✅ NOWY: Top 5 Hosts jako KOŁO -->
+            <div class="col-md-4 mb-4">
+              <div class="card shadow-sm border-0">
+                <div class="card-body">
+                  <h6 class="card-title text-center">Top 5 Hosts</h6>
+                  <canvas id="hostChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ✅ Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // Status chart
+    new Chart(document.getElementById('statusChart'), {
+        type: 'pie',
+        data: {
+            labels: {{ status_labels|safe }},
+            datasets: [{
+                data: {{ status_data|safe }},
+                backgroundColor: ['#ffc107', '#28a745', '#6c757d']
+            }]
+        }
+    });
+
+    // Production chart
+    new Chart(document.getElementById('productionChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ production_labels|safe }},
+            datasets: [{
+                data: {{ production_data|safe }},
+                backgroundColor: ['#007bff', '#dc3545']
+            }]
+        }
+    });
+
+    // ✅ NOWY: Top 5 Hosts (Koło)
+    new Chart(document.getElementById('hostChart'), {
+        type: 'doughnut',
+        data: {
+            labels: {{ host_labels|safe }},
+            datasets: [{
+                data: {{ host_values|safe }},
+                backgroundColor: ['#6610f2', '#17a2b8', '#ffc107', '#28a745', '#dc3545']
+            }]
+        }
+    });
+});
+</script>
+{% endblock %}

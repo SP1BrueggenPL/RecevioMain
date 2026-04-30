@@ -1,0 +1,94 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: nowrap;">
+    {% trans "Provide your signature below" %}
+  </h1>
+
+  <canvas id="signature-pad" width="900" height="300"
+          style="border: 2px solid #ccc; border-radius: 8px; margin-bottom: 2rem;">
+  </canvas><br>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="signature_data" id="signature_data">
+    <div style="margin-top: 1rem;">
+      <button type="button" onclick="clearSignature()"
+        style="
+          width: 300px;
+          height: 100px;
+          font-size: 2rem;
+          margin: 10px;
+          background-color: #514b51;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+        <b>{% trans "Clear" %}</b>
+      </button>
+      <button type="submit" onclick="saveSignature()"
+        style="
+          width: 300px;
+          height: 100px;
+          font-size: 2rem;
+          margin: 10px;
+          background-color: #cc6884;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+        <b>{% trans "Finish" %}</b>
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+const canvas = document.getElementById("signature-pad");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+
+canvas.onmousedown = (e) => {
+  drawing = true;
+  ctx.beginPath();
+  const rect = canvas.getBoundingClientRect();
+  ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+};
+
+canvas.onmouseup = () => drawing = false;
+canvas.onmouseleave = () => drawing = false;
+
+canvas.onmousemove = (e) => {
+  if (!drawing) return;
+  const rect = canvas.getBoundingClientRect();
+  ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+  ctx.stroke();
+};
+
+function saveSignature() {
+  document.getElementById("signature_data").value = canvas.toDataURL();
+}
+
+function clearSignature() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.beginPath();
+}
+</script>
+{% endblock %}

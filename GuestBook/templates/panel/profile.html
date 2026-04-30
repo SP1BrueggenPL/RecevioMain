@@ -1,0 +1,59 @@
+{% extends 'base_panel.html' %}
+{% block content %}
+
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-10">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">User Profile</h1>
+          <br>
+
+          <div class="mb-4">
+            <h5>Personal Information</h5>
+            <ul class="list-group">
+              <li class="list-group-item"><strong>First Name:</strong> {{ profile.first_name }}</li>
+              <li class="list-group-item"><strong>Last Name:</strong> {{ profile.last_name }}</li>
+              <li class="list-group-item"><strong>Email:</strong> {{ profile.email }}</li>
+              <li class="list-group-item"><strong>Phone Number:</strong> {{ profile.phone_number }}</li>
+            </ul>
+          </div>
+
+          <form method="post" enctype="multipart/form-data">
+            {% csrf_token %}
+            <input type="hidden" name="signature_submit" value="1">
+            <div class="mb-3">
+              <label for="signature" class="form-label"><strong>Signature</strong></label><br>
+              {% if profile.signature %}
+                <img src="{{ profile.signature.url }}" alt="Signature" class="img-fluid mb-2" style="max-width:300px;"><br>
+              {% else %}
+                <p class="text-muted">No signature provided</p>
+              {% endif %}
+              <input type="file" name="signature" class="form-control">
+            </div>
+            <button type="submit" class="btn btn-primary mt-2">Update Signature</button>
+          </form>
+
+          <hr>
+
+          {# ✅ TYLKO gdy brak dostępu do rezerwacji #}
+          {% if not has_res_access %}
+            <div class="mt-3">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="request_res_access" value="1">
+                <button type="submit" class="btn btn-warning">
+                  <i class="fa fa-envelope"></i> I need access to Reservation
+                </button>
+              </form>
+            </div>
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

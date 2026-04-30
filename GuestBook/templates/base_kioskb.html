@@ -1,0 +1,80 @@
+{% load static i18n %}
+{% get_current_language as LANGUAGE %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GuestBook</title>
+    <link href="{% static 'css/kiosk.css' %}" rel="stylesheet">
+    <style>
+        body {
+            opacity: 0;
+            transition: opacity 0.6s ease-in-out;
+        }
+
+        body.fade-in {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+
+  {% block content %}
+  {% endblock %}
+
+ <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // ✅ Efekt fade-in przy normalnym ładowaniu
+    document.body.classList.add('fade-in');
+
+    // ✅ Obsługa fade-out tylko dla linków i GET, z wyjątkiem przycisków startowych
+    const linksAndButtons = document.querySelectorAll('a, button[type="submit"]');
+    linksAndButtons.forEach(function (el) {
+      el.addEventListener('click', function (e) {
+        const form = el.closest('form');
+        const isPost = form?.method?.toLowerCase() === 'post';
+        const href = el.closest('a')?.href || form?.action || '#';
+
+        // ✅ Pomiń fade-out dla przycisku START i ekranów wyboru metody
+        if (
+          href.includes('choose_language') ||
+          href.includes('enter_badge') ||
+          href.includes('enter_code') ||
+          href.includes('enter_id')
+        ) {
+          return;
+        }
+
+        if (!form || !isPost) {
+          e.preventDefault();
+          document.body.classList.remove('fade-in');
+          document.body.style.opacity = 0;
+          setTimeout(() => {
+            window.location.href = href;
+          }, 300);
+        }
+      });
+    });
+  });
+
+  // ✅ Naprawa powrotu z historii przeglądarki (bfcache)
+  window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+      document.body.classList.add('fade-in');
+      document.body.style.opacity = 1;
+    }
+  });
+
+  // ✅ Wyłączenie autouzupełniania w całym kiosku
+  window.addEventListener('load', function() {
+    document.querySelectorAll('form').forEach(form => {
+      form.setAttribute('autocomplete', 'off');
+    });
+    document.querySelectorAll('input').forEach(input => {
+      input.setAttribute('autocomplete', 'off');
+    });
+  });
+</script>
+
+
+</body>
+</html>

@@ -1,0 +1,57 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 3rem; white-space: nowrap;">
+    {% trans "Will you be under supervision during your visit?" %}
+  </h1>
+
+  <form method="post" style="margin-bottom: 2rem;">
+    {% csrf_token %}
+    <input type="hidden" name="with_supervision" value="True">
+    <button type="submit" class="option-btn">
+      <b>{% trans "Yes" %}</b>
+    </button>
+  </form>
+
+  <form method="post">
+    {% csrf_token %}
+    <input type="hidden" name="with_supervision" value="False">
+    <button type="submit" class="option-btn">
+      <b>{% trans "No" %}</b>
+    </button>
+  </form>
+</div>
+
+<style>
+  .option-btn {
+    width: 320px;
+    height: 100px;
+    background-color: #cc6884;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    font-size: 2rem;
+    cursor: pointer;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease-in-out;
+  }
+
+  .option-btn:hover {
+    transform: scale(1.05);
+    background-color: #a24e6a;
+  }
+</style>
+{% endblock %}

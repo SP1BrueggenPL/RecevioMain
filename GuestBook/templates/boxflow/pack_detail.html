@@ -1,0 +1,63 @@
+{% extends 'base_panel.html' %}
+{% block content %}
+<br><br><br>
+<section class="intro-single">
+  <div class="container">
+    <h1 class="title-single mb-3">Package details</h1>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="mb-3 d-flex align-items-center gap-3 flex-wrap">
+          <span class="h3 mb-0 font-monospace">{{ pkg.code }}</span>
+          {% if pkg.status == 'in_box' %}
+            <span class="badge bg-warning text-dark">In parcel locker</span>
+          {% else %}
+            <span class="badge bg-success">Issued</span>
+          {% endif %}
+        </div>
+
+        <ul class="list-group list-group-flush">
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Sender</span><span class="fw-semibold">{{ pkg.sender }}</span>
+  </li>
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Recipient</span><span class="fw-semibold">{{ pkg.recipient }}</span>
+  </li>
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Delivered</span><span>{{ pkg.delivered_at|date:"d.m.Y, H:i" }}</span>
+  </li>
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Created by</span><span>{{ pkg.created_by|default:"-" }}</span>
+  </li>
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Issued</span>
+    <span>
+      {% if pkg.issued_at %}
+        {{ pkg.issued_at|date:"d.m.Y, H:i" }}{% if pkg.issued_by %} by {{ pkg.issued_by }}{% endif %}
+      {% else %}—{% endif %}
+    </span>
+  </li>
+
+  {# ✅ Nowy wiersz: kto odebrał #}
+  <li class="list-group-item d-flex justify-content-between">
+    <span class="text-muted">Collected by</span>
+    <span>
+      {% if pkg.collected_by %}{{ pkg.collected_by.name }}
+      {% elif pkg.collected_by_name %}{{ pkg.collected_by_name }}
+      {% else %}—{% endif %}
+    </span>
+  </li>
+</ul>
+
+        <div class="mt-4 d-flex gap-2 flex-wrap">
+          <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">Back</a>
+          <a href="{% url 'boxflow_reprint' pkg.pk %}" class="btn btn-outline-primary">Reprint label</a>
+          {% if request.user.groups.all.0.name in 'GuestBook_Helpdesk SupportCenter' %}
+            <a href="{% url 'helpdesk_package_edit' pkg.pk %}" class="btn btn-outline-warning">Edit</a>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

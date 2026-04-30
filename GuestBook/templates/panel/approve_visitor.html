@@ -1,0 +1,107 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+
+{% block content %}
+<section class="intro-single mt-5">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">Approve Visitor</h1>
+          <br>
+
+          <ul class="list-group">
+            <li class="list-group-item"><strong>Language:</strong>
+              {% if visitor.language == 'pl' %}Polish
+              {% elif visitor.language == 'en' %}English
+              {% else %}Unknown
+              {% endif %}
+            </li>
+
+            <li class="list-group-item"><strong>Full Name:</strong> {{ visitor.first_name }} {{ visitor.last_name }}</li>
+            <li class="list-group-item"><strong>Phone Number:</strong> {{ visitor.phone }}</li>
+            <li class="list-group-item"><strong>Company:</strong>
+  {% if visitor.factory %}
+    {{ visitor.factory.company_name }}
+  {% elif visitor.company_name_text %}
+    {{ visitor.company_name_text }}
+  {% else %}
+    <span class="text-muted">No company</span>
+  {% endif %}
+</li>
+
+            <li class="list-group-item"><strong>Purpose of Visit:</strong> {{ visitor.visit_purpose }}</li>
+              {% if visitor.audit_start_date or visitor.audit_end_date %}
+  <li class="list-group-item">
+    <strong>Audit Start Date:</strong>
+    {% if visitor.audit_start_date %}
+      {{ visitor.audit_start_date|date:"d.m.Y" }}
+    {% else %}
+      <span class="text-muted">Not specified</span>
+    {% endif %}
+  </li>
+  <li class="list-group-item">
+    <strong>Audit End Date:</strong>
+    {% if visitor.audit_end_date %}
+      {{ visitor.audit_end_date|date:"d.m.Y" }}
+    {% else %}
+      <span class="text-muted">Not specified</span>
+    {% endif %}
+  </li>
+{% endif %}
+
+            <li class="list-group-item"><strong>Host:</strong> {{ visitor.host.host_name }}</li>
+            <li class="list-group-item"><strong>Host Phone:</strong> {{ visitor.host.phone }}</li>
+            <li class="list-group-item"><strong>ID:</strong> {{ visitor.visitor_id }}</li>
+            <li class="list-group-item"><strong>Production Area:</strong> {{ visitor.production_area|yesno:"Yes,No" }}</li>
+            {% if visitor.production_area %}
+                        <li class="list-group-item"><strong>Question 1:</strong> {{ visitor.safety_question_1 }}</li>
+                        <li class="list-group-item"><strong>Question 2:</strong> {{ visitor.safety_question_2 }}</li>
+                        <li class="list-group-item"><strong>Question 3:</strong> {{ visitor.safety_question_3 }}</li>
+            {% endif %}
+            <li class="list-group-item"><strong>With Supervision:</strong>
+              {% if visitor.with_supervision is None %}-{% elif visitor.with_supervision %}Yes{% else %}No{% endif %}
+            </li>
+            <li class="list-group-item"><strong>Start Time:</strong> {{ visitor.start_time|date:"d.m.Y, H:i" }}</li>
+            <li class="list-group-item"><strong>End Time:</strong>
+              {% if guest.badge_returned and guest.end_time %}
+                {{ guest.end_time|date:"d.m.Y, H:i" }}
+              {% else %}
+                -
+              {% endif %}
+            </li>
+            <li class="list-group-item"><strong>Signature:</strong><br>
+              {% if visitor.signed %}
+                <img src="{{ visitor.signed.url }}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
+              {% else %}
+                <span class="text-muted">No signature provided</span>
+              {% endif %}
+            </li>
+          </ul>
+
+          <br>
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="form-group">
+              <label for="status"><strong>Mark visitor as:</strong></label>
+              <select class="form-control" name="known_guest" id="status" required>
+                <option value="True">Known guest</option>
+                <option value="False">Unknown guest</option>
+              </select>
+            </div>
+
+            <button type="submit" class="btn btn-success">Approve</button>
+            <a href="{% url 'pending_approvals' %}" class="btn btn-secondary">Back</a>
+          </form>
+            <br>
+<a href="{% url 'reprint_badge' visitor.id %}" class="btn btn-outline-primary">
+  <i class="fa fa-print"></i> Reprint Badge
+</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

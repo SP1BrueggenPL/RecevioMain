@@ -1,0 +1,105 @@
+
+<!--{% load static i18n %}-->
+<!--{% get_current_language as LANGUAGE %}-->
+<!--<html lang="{{ LANGUAGE }}">-->
+<!--<head>-->
+<!--    <meta charset="UTF-8">-->
+<!--    <title>GuestBook</title>-->
+<!--    <link href="{% static 'css/kiosk.css' %}" rel="stylesheet">-->
+<!--    <style>-->
+<!--        body {-->
+<!--            opacity: 0;-->
+<!--            transition: opacity 0.6s ease-in-out;-->
+<!--        }-->
+
+<!--        body.fade-in {-->
+<!--            opacity: 1;-->
+<!--        }-->
+
+<!--        /* ✅ Styl uniwersalnego przycisku powrotu */-->
+<!--        .back-button {-->
+<!--            position: fixed;-->
+<!--            bottom: 30px;-->
+<!--            left: 30px;-->
+<!--            width: 200px;-->
+<!--            height: 70px;-->
+<!--            font-size: 1.8rem;-->
+<!--            background-color: #514b51;-->
+<!--            color: white;-->
+<!--            border: none;-->
+<!--            border-radius: 12px;-->
+<!--            cursor: pointer;-->
+<!--            box-shadow: 0 4px 8px rgba(0,0,0,0.2);-->
+<!--            z-index: 9999;-->
+<!--        }-->
+<!--        .back-button:hover {-->
+<!--            background-color: #3e3a3e;-->
+<!--        }-->
+<!--    </style>-->
+<!--</head>-->
+<!--<body>-->
+
+<!--  {% block content %}-->
+<!--  {% endblock %}-->
+
+<!--  &lt;!&ndash; ✅ Przycisk powrotu &ndash;&gt;-->
+<!--  <button class="back-button" onclick="history.back()">-->
+<!--      ⬅ {% trans "Back" %}-->
+<!--  </button>-->
+
+<!--  <script>-->
+<!--  document.addEventListener('DOMContentLoaded', function () {-->
+<!--    // ✅ Efekt fade-in przy normalnym ładowaniu-->
+<!--    document.body.classList.add('fade-in');-->
+
+<!--    // ✅ Obsługa fade-out tylko dla linków i GET, z wyjątkiem przycisków startowych-->
+<!--    const linksAndButtons = document.querySelectorAll('a, button[type="submit"]');-->
+<!--    linksAndButtons.forEach(function (el) {-->
+<!--      el.addEventListener('click', function (e) {-->
+<!--        const form = el.closest('form');-->
+<!--        const isPost = form?.method?.toLowerCase() === 'post';-->
+<!--        const href = el.closest('a')?.href || form?.action || '#';-->
+
+<!--        // ✅ Pomiń fade-out dla przycisku START i ekranów wyboru metody-->
+<!--        if (-->
+<!--          href.includes('choose_language') ||-->
+<!--          href.includes('enter_badge') ||-->
+<!--          href.includes('enter_code') ||-->
+<!--          href.includes('enter_id')-->
+<!--        ) {-->
+<!--          return;-->
+<!--        }-->
+
+<!--        if (!form || !isPost) {-->
+<!--          e.preventDefault();-->
+<!--          document.body.classList.remove('fade-in');-->
+<!--          document.body.style.opacity = 0;-->
+<!--          setTimeout(() => {-->
+<!--            window.location.href = href;-->
+<!--          }, 300);-->
+<!--        }-->
+<!--      });-->
+<!--    });-->
+<!--  });-->
+
+<!--  // ✅ Naprawa powrotu z historii przeglądarki (bfcache)-->
+<!--  window.addEventListener('pageshow', function (event) {-->
+<!--    if (event.persisted) {-->
+<!--      document.body.classList.add('fade-in');-->
+<!--      document.body.style.opacity = 1;-->
+<!--    }-->
+<!--  });-->
+
+<!--  // ✅ Wyłączenie autouzupełniania w całym kiosku-->
+<!--  window.addEventListener('load', function() {-->
+<!--    document.querySelectorAll('form').forEach(form => {-->
+<!--      form.setAttribute('autocomplete', 'off');-->
+<!--    });-->
+<!--    document.querySelectorAll('input').forEach(input => {-->
+<!--      input.setAttribute('autocomplete', 'off');-->
+<!--    });-->
+<!--  });-->
+<!--</script>-->
+
+<!--</body>-->
+<!--</html>-->

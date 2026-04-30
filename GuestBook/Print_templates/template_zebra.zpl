@@ -1,0 +1,38 @@
+﻿CT~~CD,~CC^~CT~
+^XA
+~TA000
+~JSN
+^LT0
+^MNW
+^MTT
+^PON
+^PMN
+^LH0,0
+^JMA
+^PR4,4
+~SD15
+^JUS
+^LRN
+^CI27
+^PA0,1,1,0
+^XZ
+^XA
+^MMT
+^PW768
+^LL472
+^LS0
+
+^FT58,340^A0B,42,43^FH\^CI28^FDNazwa Firmy:^FS
+^FT137,434^A0B,42,43^FH\^CI28^FD{company}^FS
+
+^FT220,371^A0B,42,43^FH\^CI28^FDImię i nazwisko:^FS
+^FT294,472^A0B,44,43^FH\^CI28^FD{first_name} {last_name}^FS
+
+^FT372,388^A0B,42,43^FH\^CI28^FDCel wizyty/Projekt:^FS
+^FT452,438^A0B,42,43^FH\^CI28^FD{visit_purpose}^FS
+
+^FT524,457^A0B,42,25^FB457,1,11,C^FH\^CI28^FDNadzorujący prace ze strony Brueggen\5C&^FS
+^FT606,395^A0B,42,43^FH\^CI28^FD{supervisor}^FS
+
+^PQ1,0,1,Y
+^XZ

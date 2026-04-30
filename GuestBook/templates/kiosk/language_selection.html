@@ -1,0 +1,71 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 900px; margin: auto; padding: 4rem; text-align: center;">
+    <h1 style="font-size: 3rem; margin-bottom: 2rem;">
+        Wybierz język / Choose your language
+    </h1>
+    <form method="post">
+        {% csrf_token %}
+        <button name="lang" value="pl" type="submit"
+            style="
+                width: 300px;
+                height: 100px;
+                font-size: 2rem;
+                margin: 20px;
+                background-color: #e2bc54;
+                color: black;
+                border: none;
+                border-radius: 15px;
+                cursor: pointer;
+            ">
+            <b>Polski</b>
+        </button>
+        <button name="lang" value="en" type="submit"
+            style="
+                width: 300px;
+                height: 100px;
+                font-size: 2rem;
+                margin: 20px;
+                background-color: #e2bc54;
+                color: black;
+                border: none;
+                border-radius: 15px;
+                cursor: pointer;
+            ">
+            <b>English</b>
+        </button>
+    </form>
+</div>
+
+<!-- ✅ PRZYCISK POWROTU -->
+<button onclick="history.back()"
+    style="
+        position: fixed;
+        bottom: 30px;
+        left: 30px;
+        width: 200px;
+        height: 70px;
+        font-size: 1.8rem;
+        background-color: #514b51;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    ">
+    ⬅ {% trans "Back" %}
+</button>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="text-align: center; padding: 4rem;">
+  <h1 style="font-size: 3rem; margin-bottom: 3rem;">
+    {% trans "Did you receive a badge (ID) for your visit?" %}
+  </h1>
+
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" name="has_badge" value="True" style="
+        width: 300px;
+        height: 100px;
+        margin: 1.5rem;
+        background-color: #cc6884;
+        color: white;
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: 15px;
+        font-size: 2rem;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+      ">
+      <b>{% trans "Yes" %}</b>
+    </button>
+
+    <button type="submit" name="has_badge" value="False" style="
+        width: 300px;
+        height: 100px;
+        margin: 1.5rem;
+        background-color: #cc6884;
+        color: white;
+        padding: 1rem 2rem;
+        border: none;
+        border-radius: 15px;
+        font-size: 2rem;
+        font-weight: bold;
+        cursor: pointer;
+        box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+      ">
+      <b>{% trans "No" %}</b>
+    </button>
+  </form>
+</div>
+{% endblock %}

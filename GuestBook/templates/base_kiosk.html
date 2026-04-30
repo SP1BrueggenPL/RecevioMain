@@ -1,0 +1,269 @@
+{% load static i18n %}
+{% get_current_language as LANGUAGE %}
+<html lang="{{ LANGUAGE }}">
+<head>
+    <meta charset="UTF-8">
+    <title>GuestBook</title>
+    <link href="{% static 'css/kiosk.css' %}" rel="stylesheet">
+<style>
+    body { opacity: 0; transition: opacity 0.6s ease-in-out; }
+    body.fade-in { opacity: 1; }
+
+    .back-button {
+        position: fixed; bottom: 30px; left: 30px;
+        width: 200px; height: 70px; font-size: 1.8rem;
+        background-color: #514b51; color: white; border: none; border-radius: 12px;
+        cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 9999;
+    }
+    .back-button:hover { background-color: #3e3a3e; }
+
+    /* ✅ Klawiatury */
+    .virtual-keyboard, .numeric-keyboard {
+        display: none; position: fixed; bottom: 0; left: 0; right: 0;
+        background: #514b51; padding: 15px 10px; z-index: 9999; text-align: center;
+        height: 40vh; transform: translateY(100%); opacity: 0;
+        transition: transform 0.4s ease, opacity 0.4s ease;
+    }
+    .virtual-keyboard.active, .numeric-keyboard.active {
+        display: block; transform: translateY(0); opacity: 1;
+    }
+
+    .vk-row { display: flex; justify-content: center; margin-bottom: 8px; }
+    .vk-btn {
+        margin: 5px; padding: 0; font-size: 2.5rem; background: #e2bc54;
+        border: none; border-radius: 10px; color: #000; cursor: pointer;
+        width: 80px; height: 80px; flex-shrink: 0;
+    }
+    .vk-btn:hover { background: #d1a844; }
+    .vk-btn-wide { width: 200px; }
+
+    /* ✅ Scrim pod klawiaturą */
+    #kb-scrim{
+      display:none; position:fixed; inset:0; background:transparent; z-index:9998;
+    }
+    #kb-scrim.active{ display:block; }
+</style>
+</head>
+<body>
+
+{% block content %}{% endblock %}
+
+<button class="back-button" onclick="history.back()">⬅ {% trans "Back" %}</button>
+
+<!-- ✅ Scrim do zamykania jednym kliknięciem -->
+<div id="kb-scrim"></div>
+
+<!-- ✅ Klawiatura alfanumeryczna -->
+<div id="virtual-keyboard" class="virtual-keyboard"></div>
+
+<!-- ✅ Klawiatura numeryczna -->
+<div id="numeric-keyboard" class="numeric-keyboard"></div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  document.body.classList.add('fade-in');
+});
+
+/* ========= Wspólne ========= */
+const scrim       = document.getElementById('kb-scrim');
+const keyboard    = document.getElementById('virtual-keyboard');
+const keyboardNum = document.getElementById('numeric-keyboard');
+
+let activeInput    = null; // alpha
+let activeInputNum = null; // numeric
+let keyboardTimeout, keyboardNumTimeout;
+
+/* ========= Klawiatura QWERTY ========= */
+let isShift = false, isCaps = false;
+
+const rows = ["1234567890","qwertyuiop","asdfghjkl","zxcvbnm"];
+
+function toggleShift(){ isShift = !isShift; refreshKeys(); }
+function toggleCaps(){  isCaps  = !isCaps;  refreshKeys(); }
+
+function refreshKeys(){
+  document.querySelectorAll("#virtual-keyboard .vk-btn.letter").forEach(btn => {
+    const char = btn.dataset.char;
+    btn.textContent = (isShift || isCaps) ? char.toUpperCase() : char.toLowerCase();
+  });
+}
+
+function typeKey(k){
+  if (!activeInput) return;
+  if (k === "backspace") {
+    activeInput.value = activeInput.value.slice(0, -1);
+  } else if (k === "space") {
+    activeInput.value += " ";
+  } else {
+    const charToAdd = (isShift || isCaps) ? k.toUpperCase() : k;
+    activeInput.value += charToAdd;
+  }
+  if (isShift){ isShift = false; refreshKeys(); }
+  activeInput.focus();
+  resetKeyboardTimeout();
+}
+
+function showKeyboard(){
+  keyboardNum.classList.remove('active');
+  keyboard.classList.add("active");
+  scrim.classList.add('active');
+  resetKeyboardTimeout();
+}
+function hideKeyboard(){
+  keyboard.classList.remove("active");
+  if (!keyboardNum.classList.contains('active')) scrim.classList.remove('active');
+}
+function resetKeyboardTimeout(){
+  clearTimeout(keyboardTimeout);
+  keyboardTimeout = setTimeout(hideKeyboard, 10000); // fallback auto-hide
+}
+
+function createKeyboard(){
+  keyboard.innerHTML = "";
+  rows.forEach(row => {
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "vk-row";
+    row.split("").forEach(k => {
+      const btn = document.createElement("button");
+      btn.dataset.char = k;
+      btn.textContent = (isShift || isCaps) ? k.toUpperCase() : k;
+      btn.className = "vk-btn letter";
+      btn.onclick = () => typeKey(k);
+      rowDiv.appendChild(btn);
+    });
+    keyboard.appendChild(rowDiv);
+  });
+
+  const ctrlRow = document.createElement("div");
+  ctrlRow.className = "vk-row";
+
+  const shiftBtn = document.createElement("button");
+  shiftBtn.textContent = "⇧"; shiftBtn.className = "vk-btn"; shiftBtn.onclick = toggleShift;
+  ctrlRow.appendChild(shiftBtn);
+
+  const capsBtn = document.createElement("button");
+  capsBtn.textContent = "⇪"; capsBtn.className = "vk-btn"; capsBtn.onclick = toggleCaps;
+  ctrlRow.appendChild(capsBtn);
+
+  const spaceBtn = document.createElement("button");
+  spaceBtn.textContent = "␣"; spaceBtn.className = "vk-btn vk-btn-wide"; spaceBtn.onclick = () => typeKey("space");
+  ctrlRow.appendChild(spaceBtn);
+
+  const backBtn = document.createElement("button");
+  backBtn.textContent = "⌫"; backBtn.className = "vk-btn"; backBtn.onclick = () => typeKey("backspace");
+  ctrlRow.appendChild(backBtn);
+
+  const enterBtn = document.createElement("button");
+  enterBtn.textContent = "⏎"; enterBtn.className = "vk-btn"; enterBtn.onclick = hideKeyboard;
+  ctrlRow.appendChild(enterBtn);
+
+  keyboard.appendChild(ctrlRow);
+}
+createKeyboard();
+
+/* ========= Klawiatura numeryczna ========= */
+function createNumericKeyboard(){
+  keyboardNum.innerHTML = "";
+  const numRows = [["1","2","3"],["4","5","6"],["7","8","9"],["0","backspace","enter"]];
+  numRows.forEach(row => {
+    const rowDiv = document.createElement("div");
+    rowDiv.className = "vk-row";
+    row.forEach(k => {
+      const btn = document.createElement("button");
+      btn.textContent = k === "backspace" ? "⌫" : (k === "enter" ? "⏎" : k);
+      btn.className = "vk-btn";
+      btn.onclick = () => typeNumKey(k);
+      rowDiv.appendChild(btn);
+    });
+    keyboardNum.appendChild(rowDiv);
+  });
+}
+createNumericKeyboard();
+
+function typeNumKey(k){
+  if (!activeInputNum) return;
+  if (k === "backspace") {
+    activeInputNum.value = activeInputNum.value.slice(0, -1);
+  } else if (k === "enter") {
+    hideKeyboardNum();
+  } else {
+    const max = parseInt(activeInputNum.getAttribute('maxlength') || '3', 10);
+    if (activeInputNum.value.length < max) {
+      activeInputNum.value += k;
+    }
+  }
+  activeInputNum.focus();
+  resetKeyboardNumTimeout();
+}
+
+function showKeyboardNum(){
+  keyboard.classList.remove('active');
+  keyboardNum.classList.add("active");
+  scrim.classList.add('active');
+  resetKeyboardNumTimeout();
+}
+function hideKeyboardNum(){
+  keyboardNum.classList.remove("active");
+  if (!keyboard.classList.contains('active')) scrim.classList.remove('active');
+}
+function resetKeyboardNumTimeout(){
+  clearTimeout(keyboardNumTimeout);
+  keyboardNumTimeout = setTimeout(hideKeyboardNum, 30000); // fallback auto-hide
+}
+
+/* ========= Zamykanie kliknięciem poza ========= */
+function hideBoth(){
+  keyboard.classList.remove('active');
+  keyboardNum.classList.remove('active');
+  scrim.classList.remove('active');
+}
+scrim.addEventListener('pointerdown', hideBoth);
+keyboard.addEventListener('pointerdown', (e) => { if (e.target === keyboard) hideKeyboard(); });
+keyboardNum.addEventListener('pointerdown', (e) => { if (e.target === keyboardNum) hideKeyboardNum(); });
+
+/* ========= Podpinanie do pól =========
+   TYLKO po kliknięciu (focus). Usuwamy hover/mouseenter. */
+document.querySelectorAll("input.kb-alpha, textarea.kb-alpha").forEach(input => {
+  input.addEventListener("focus", () => { activeInput = input; showKeyboard(); });
+});
+document.querySelectorAll("input.kb-numeric").forEach(input => {
+  // upewnij się, że atrybuty są ustawione
+  if (!input.hasAttribute('maxlength')) input.setAttribute('maxlength','3');
+  if (!input.hasAttribute('pattern'))   input.setAttribute('pattern','[0-9]{3}');
+  input.setAttribute('inputmode','numeric');
+
+  input.addEventListener("focus", () => { activeInputNum = input; showKeyboardNum(); });
+
+  // twardy limit 3 cyfr również dla klawiatury fizycznej/wklejania
+  input.addEventListener('input', function(){
+    const v = this.value.replace(/\D+/g,'').slice(0,3);
+    if (this.value !== v) this.value = v;
+  });
+  input.addEventListener('paste', function(e){
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text') || '';
+    this.value = t.replace(/\D+/g,'').slice(0,3);
+  });
+});
+
+/* ========= Blokada submitu: dokładnie 3 cyfry ========= */
+document.querySelectorAll("form").forEach(form=>{
+  form.addEventListener("submit", function(e){
+    const field = form.querySelector("input.kb-numeric");
+    if (!field) return;
+    const v = (field.value || '').replace(/\D+/g,'');
+    if (v.length !== 3){
+      e.preventDefault();
+      field.setCustomValidity('Wpisz dokładnie 3 cyfry');
+      field.reportValidity();
+      setTimeout(()=>field.setCustomValidity(''), 400);
+    } else {
+      field.value = v; // wyślij czyste cyfry
+    }
+  });
+});
+</script>
+
+
+</body>
+</html>

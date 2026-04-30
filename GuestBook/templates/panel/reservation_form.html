@@ -1,0 +1,210 @@
+{% extends 'base_panel.html' %}
+{% load static i18n %}
+
+{% block content %}
+<br><br><br>
+<section class="intro-single">
+  <div class="container">
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+
+        <div class="title-single-box text-center">
+  <h1 class="title-single">
+    {% if edit_mode %}
+      {% trans "Edit Reservation" %}
+    {% else %}
+      {% trans "New Reservation" %}
+    {% endif %}
+  </h1>
+</div>
+
+        {% if error %}
+          <div class="alert alert-danger mt-3">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" class="mt-4">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-md-6">
+
+              <div class="form-group mb-3">
+                <label for="id_visitor_first_name">First Name</label>
+                {{ form.visitor_first_name }}
+              </div>
+
+              <div class="form-group mb-3">
+                <label for="id_visitor_last_name">Last Name</label>
+                {{ form.visitor_last_name }}
+              </div>
+
+              <div class="form-group mb-3">
+                <label for="id_phone">Phone</label>
+                {{ form.phone }}
+              </div>
+
+              <div class="form-group mb-3">
+  <label for="id_company">Company</label>
+  {{ form.company }}
+</div>
+
+<div id="other-company-wrapper" class="form-group mb-3" style="display: none;">
+  <label for="id_other_company">Other company (if not listed)</label>
+  {{ form.other_company }}
+</div>
+
+<div id="no-company-wrapper" class="form-group mb-3" style="display: none;">
+  {{ form.no_company }} {{ form.no_company.label }}
+</div>
+
+
+
+
+            </div>
+
+            <div class="col-md-6">
+<div class="form-group mb-3">
+                <label for="id_host">Host</label>
+                {{ form.host }}
+              </div>
+
+              <div class="form-group mb-3">
+                <label for="id_visit_purpose_choice">Purpose of Visit</label>
+                {{ form.visit_purpose_choice }}
+              </div>
+
+              <div class="form-group mb-3" id="other-purpose-wrapper" style="display: none;">
+                <label for="id_other_purpose">Other Purpose</label>
+                {{ form.other_purpose }}
+              </div>
+
+              <div id="audit-dates-wrapper" style="display: none;">
+                <div class="form-group mb-3">
+                  <label for="id_audit_start_date">Audit Start Date</label>
+                  {{ form.audit_start_date }}
+                </div>
+                <div class="form-group mb-3">
+                  <label for="id_audit_end_date">Audit End Date</label>
+                  {{ form.audit_end_date }}
+                </div>
+              </div>
+              <div class="form-group mb-3">
+                <label>Access to Production Area?</label><br>
+                <div class="form-check form-check-inline">
+                  <input type="radio" name="factory" value="True" class="form-check-input" id="factory_yes"
+                         {% if form.factory.value %}checked{% endif %}>
+                  <label class="form-check-label" for="factory_yes">Yes</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input type="radio" name="factory" value="False" class="form-check-input" id="factory_no"
+                         {% if not form.factory.value %}checked{% endif %}>
+                  <label class="form-check-label" for="factory_no">No</label>
+                </div>
+              </div>
+
+              <div class="form-group mb-3">
+                <label>Visitor will be supervised?</label><br>
+                <div class="form-check form-check-inline">
+                  <input type="radio" name="supervision" value="True" class="form-check-input" id="supervision_yes"
+                         {% if form.supervision.value %}checked{% endif %}>
+                  <label class="form-check-label" for="supervision_yes">Yes</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input type="radio" name="supervision" value="False" class="form-check-input" id="supervision_no"
+                         {% if not form.supervision.value %}checked{% endif %}>
+                  <label class="form-check-label" for="supervision_no">No</label>
+                </div>
+              </div>
+
+              <div class="form-group mb-3">
+                <label for="id_date">Visit Date</label>
+                {{ form.date }}
+              </div>
+
+              <div class="form-group mb-3">
+                <label for="id_time">Visit Time</label>
+                {{ form.time }}
+              </div>
+
+<!--              <div class="form-group mb-3">-->
+<!--                <label for="id_conference_needed">{% trans "Need Conference Room?" %}</label>-->
+<!--                {{ form.conference_needed }}-->
+<!--              </div>-->
+
+<!--              <div class="form-group mb-3" id="conference-room-wrapper" style="display: none;">-->
+<!--                <label for="id_conference_room">{% trans "Conference Room" %}</label>-->
+<!--                {{ form.conference_room }}-->
+<!--              </div>-->
+
+            </div>
+          </div>
+
+          <div class="mt-4 d-flex justify-content-center gap-3">
+  <a href="{% url 'reservation' %}" class="btn btn-secondary btn-lg">Back</a>
+  <button type="submit" class="btn btn-success btn-lg">
+    {% if edit_mode %}
+      {% trans "Update" %}
+    {% else %}
+      {% trans "Submit" %}
+    {% endif %}
+  </button>
+</div>
+        </form>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const purposeSelect = document.getElementById("id_visit_purpose_choice");
+    const otherWrapper = document.getElementById("other-purpose-wrapper");
+    const auditWrapper = document.getElementById("audit-dates-wrapper");
+    const confNeeded = document.getElementById("id_conference_needed");
+    const confRoom = document.getElementById("conference-room-wrapper");
+    const companySelect = document.getElementById("id_company");
+    const hostSelect = document.getElementById("id_host");
+
+    if (purposeSelect) {
+      purposeSelect.addEventListener("change", () => {
+        const val = purposeSelect.value;
+        otherWrapper.style.display = val === "other" ? "block" : "none";
+        auditWrapper.style.display = val === "audit" ? "block" : "none";
+      });
+      purposeSelect.dispatchEvent(new Event("change"));
+    }
+
+    if (confNeeded && confRoom) {
+      confNeeded.addEventListener("change", () => {
+        confRoom.style.display = confNeeded.checked ? "block" : "none";
+      });
+      confNeeded.dispatchEvent(new Event("change"));
+    }
+
+    if (companySelect && hostSelect) {
+      companySelect.addEventListener("change", () => {
+        const companyId = companySelect.value;
+        if (!companyId) return;
+        fetch(`/pl/api/get-host/?company_id=${companyId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.host_id) {
+              hostSelect.value = data.host_id;
+            }
+          })
+          .catch(error => console.error("Error fetching host:", error));
+      });
+    }
+    // obsługa dynamiczna
+if (companySelect) {
+  companySelect.addEventListener("change", () => {
+    const val = companySelect.value;
+    document.getElementById("other-company-wrapper").style.display = val ? "none" : "block";
+    document.getElementById("no-company-wrapper").style.display = val ? "none" : "block";
+  });
+  companySelect.dispatchEvent(new Event("change"));
+}
+
+  });
+</script>
+{% endblock %}

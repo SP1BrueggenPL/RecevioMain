@@ -1,0 +1,188 @@
+{% extends 'base_panel.html' %}
+{% load user_groups %}
+{% block content %}
+
+
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">Visitor Details</h1>
+          <br>
+
+          <ul class="list-group">
+            <li class="list-group-item"><strong>Language:</strong>
+  {% if guest.language == 'pl' %}
+    Polish
+  {% elif guest.language == 'en' %}
+    English
+  {% else %}
+    Unknown
+  {% endif %}
+</li>
+
+            <li class="list-group-item"><strong>Full Name:</strong> {{ guest.first_name }} {{ guest.last_name }}</li>
+              <li class="list-group-item"><strong>Phone Number:</strong> {{ guest.phone }}</li>
+            <li class="list-group-item"><strong>Company:</strong>
+              {% if guest.factory %}
+                {{ guest.factory.company_name }}
+              {% elif guest.company_name_text %}
+                {{ guest.company_name_text }}
+              {% else %}
+                <span class="text-muted">No company</span>
+              {% endif %}
+            </li>
+
+            <li class="list-group-item"><strong>Purpose of Visit:</strong> {{ guest.visit_purpose }}</li>
+              {% if guest.audit_start_date or guest.audit_end_date %}
+  <li class="list-group-item">
+    <strong>Audit Start Date:</strong>
+    {% if guest.audit_start_date %}
+      {{ guest.audit_start_date|date:"d.m.Y" }}
+    {% else %}
+      <span class="text-muted">Not specified</span>
+    {% endif %}
+  </li>
+  <li class="list-group-item">
+    <strong>Audit End Date:</strong>
+    {% if guest.audit_end_date %}
+      {{ guest.audit_end_date|date:"d.m.Y" }}
+    {% else %}
+      <span class="text-muted">Not specified</span>
+    {% endif %}
+  </li>
+{% endif %}
+
+            <li class="list-group-item"><strong>Host:</strong> {{ guest.host.host_name }}</li>
+            <li class="list-group-item"><strong>Host Phone:</strong> {{ guest.host.phone }}</li>
+            <li class="list-group-item"><strong>ID:</strong> {{ guest.visitor_id }}</li>
+            <li class="list-group-item"><strong>Production Area:</strong> {% if guest.production_area %}Yes{% else %}No{% endif %}</li>
+              {% if guest.production_area %}
+    <li class="list-group-item"><strong>Question 1:</strong> {{ guest.safety_question_1 }}</li>
+    <li class="list-group-item"><strong>Question 2:</strong> {{ guest.safety_question_2 }}</li>
+    <li class="list-group-item"><strong>Question 3:</strong> {{ guest.safety_question_3 }}</li>
+{% endif %}
+
+{% if guest.production_area and guest.safety_question_3 in "Yes,Tak" %}
+  <li class="list-group-item bg-light">
+    <div class="alert alert-danger d-flex align-items-center m-0" role="alert" style="font-size:1.2rem;">
+      <i class="fa fa-exclamation-triangle me-2" style="font-size:1.5rem;"></i>
+      <div>
+        <strong>Attention:</strong> This visitor declared an allergy. They are entering the production area at their own risk.
+      </div>
+    </div>
+  </li>
+{% endif %}
+
+
+              <li class="list-group-item"><strong>With Supervision:</strong>
+              {% if guest.with_supervision is None %}
+                -
+              {% elif guest.with_supervision %}
+                Yes
+              {% else %}
+                No
+              {% endif %}
+            </li>
+            <li class="list-group-item"><strong>Start Time:</strong> {{ guest.start_time|date:"d.m.Y, H:i" }}</li>
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+  <div>
+    <strong>End Time:</strong>
+    {% if guest.end_time %}
+      {{ guest.end_time|date:"d.m.Y, H:i" }}
+    {% else %}
+      -
+    {% endif %}
+  </div>
+
+
+  <button class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editEndTimeModal">
+    <i class="fa fa-edit"></i> Edit
+  </button>
+
+</li>
+
+              {% if guest.approved_by %}
+  <li class="list-group-item"><strong>Approved By:</strong> {{ guest.approved_by.first_name }} {{ guest.approved_by.last_name }}</li>
+{% endif %}
+
+            <li class="list-group-item"><strong>Status:</strong>
+  {% if guest.end_time or guest.badge_returned %}
+    <span class="badge badge-success">Finished</span>
+  {% else %}
+    <span class="badge badge-warning">Open</span>
+  {% endif %}
+</li>
+
+
+{% if guest.production_area and guest.safety_acknowledged or guest.badge_returned %}
+<li class="list-group-item">
+  <strong>Safety Document:</strong><br>
+  <a href="{% url 'generate_bhp_pdf' guest.id %}" class="btn btn-outline-success mt-2">
+    Download BHP PDF
+  </a>
+</li>
+{% endif %}
+
+            <li class="list-group-item"><strong>Signature:</strong><br>
+              {% if guest.signed %}
+                <img src="{{ guest.signed.url }}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
+              {% else %}
+                <span class="text-muted">No signature provided</span>
+              {% endif %}
+            </li>
+              {% if guest.badge_returned and guest.returned_by.adminprofile.signature %}
+                <li class="list-group-item">
+                <strong>Confirmed Return By:</strong><br>
+                <p>{{ guest.returned_by.first_name }} {{ guest.returned_by.last_name }}</p>
+                <img src="{{ guest.returned_by.adminprofile.signature.url }}" alt="Admin Signature" class="img-fluid mt-2" style="max-width: 300px;">
+                </li>
+              {% endif %}
+          </ul>
+          <br>
+<a href="{% url 'dashboard' %}" class="btn btn-secondary">← Back to GuestBook</a>
+
+{% if user.is_authenticated and user|has_group:"GuestBook_Helpdesk" %}
+  <a href="{% url 'visitor_edit' guest.id %}" class="btn btn-warning ms-2">
+    <i class="fa fa-edit"></i> Edit Visitor
+  </a>
+{% endif %}
+<a href="{% url 'reprint_badge' guest.id %}" class="btn btn-outline-primary ms-2">
+  <i class="fa fa-print"></i> Reprint Badge
+</a>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<div class="modal fade" id="editEndTimeModal" tabindex="-1" aria-labelledby="editEndTimeModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <form method="post">
+        {% csrf_token %}
+        <div class="modal-header">
+          <h5 class="modal-title" id="editEndTimeModalLabel">Edit End Time</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <label for="end_time" class="form-label">Select Date & Time</label>
+          <input type="datetime-local" class="form-control" name="end_time" id="end_time"
+                 value="{{ guest.end_time|date:'Y-m-d\\TH:i' }}">
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" name="update_end_time" class="btn btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+
+{% endblock %}

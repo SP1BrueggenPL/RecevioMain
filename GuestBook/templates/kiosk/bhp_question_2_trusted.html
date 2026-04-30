@@ -1,0 +1,79 @@
+{% extends 'base_kiosk.html' %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 30px;
+">
+  <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: normal; word-break: break-word;">
+    {% trans "Hygiene and Safety rules for visitors for Wilga" %}
+</h1>
+
+
+  <form method="post" style="font-size: 2rem;">
+    {% csrf_token %}
+
+    <label for="question_2" style="display: block; font-size: 2rem; margin-bottom: 2rem;">
+      {% trans "Which countries have you visited in the past four weeks?" %}
+    </label>
+
+    <input type="text" id="question_2" name="question_2" required
+           style="
+             width: 100%;
+             max-width: 900px;
+             font-size: 1.8rem;
+             padding: 15px;
+             margin-bottom: 1.5rem;
+             border: 2px solid #ccc;
+             border-radius: 8px;
+           "><br>
+
+    <label style="font-size: 1.8rem;">
+      <input type="checkbox" id="no_travel_checkbox" onchange="toggleInput()"
+             style="transform: scale(1.8); margin-right: 15px;">
+      {% trans "I have not visited any countries within the last four weeks" %}
+    </label>
+
+    <div style="margin-top: 3rem; text-align: center;">
+      <button type="submit"
+        style="
+          width: 320px;
+          height: 100px;
+          font-size: 2rem;
+          background-color: #cc6884;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+        <b>{% trans "Continue" %}</b>
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+  function toggleInput() {
+    const checkbox = document.getElementById("no_travel_checkbox");
+    const input = document.getElementById("question_2");
+
+    if (checkbox.checked) {
+      input.value = "{{ _('I have not visited any countries within the last four weeks') }}";
+      input.readOnly = true;
+    } else {
+      input.value = "";
+      input.readOnly = false;
+    }
+  }
+</script>
+{% endblock %}

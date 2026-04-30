@@ -1,0 +1,66 @@
+Krótko: **nie wysyłasz “bezpośrednio z maila z profilu”**, bo w tej linijce ustawiasz nadawcę na globalny adres z ustawień:
+
+```python
+from_addr = (getattr(settings, "DEFAULT_FROM_EMAIL", "") or "").strip()
+...
+email = EmailMessage(..., from_email=from_addr, to=[to_addr], reply_to=[reply_email] ...)
+```
+
+Zrobiłem to celowo w poprzedniej wersji, bo:
+
+1. **SPF/DMARC/SMTP-auth** – większość serwerów SMTP nie pozwala wysyłać z *dowolnego* „From: [user@gmail.com](mailto:user@gmail.com)” przez Twoje konto firmowe. Taka próba bardzo często kończy się odrzuceniem lub wyląduje w spamie.
+2. **Dostarczalność** – poprawny wzorzec to: `From = DEFAULT_FROM_EMAIL`, a **adres użytkownika** dajemy w `Reply-To`. Klikając „Odpowiedz” w Helpdesku, odpowiedź idzie do użytkownika – bez ryzyka odrzucenia przez serwer.
+
+Jeśli *koniecznie* chcesz wysyłać **z adresu z profilu** (i masz pewność, że Wasz serwer SMTP na to pozwala – np. adres jest z tej samej domeny i konto ma uprawnienie „send as”), możesz włączyć to warunkowo i zostawić bezpieczny fallback:
+
+```python
+allowed_domain = getattr(settings, "MAIL_USER_DOMAIN", "brueggen.com")
+
+# Nadawca: preferuj mail użytkownika z dopuszczalnej domeny, inaczej fallback
+user_from_ok = bool(reply_email) and reply_email.lower().endswith(f"@{allowed_domain}")
+
+from_addr = reply_email if user_from_ok else getattr(settings, "DEFAULT_FROM_EMAIL")
+
+email = EmailMessage(
+    subject=subject,
+    body=body,
+    from_email=from_addr,
+    to=[to_addr],
+    # nawet gdy wysyłasz "as user", warto zostawić Reply-To
+    reply_to=[reply_email] if reply_email else None,
+    headers={"X-Recevio-User": user.username},
+    connection=conn,
+)
+```
+
+Albo wariant bardziej „RFC-bezpieczny” (gdy serwer wymaga, by *envelope sender* był z konta nadawcy), gdzie **From** jest użytkownikiem, ale *envelope sender* zostaje z `DEFAULT_FROM_EMAIL`:
+
+```python
+display_name = user.get_full_name() or user.username
+email = EmailMessage(
+    subject,
+    body,
+    from_email=f"{display_name} <{settings.DEFAULT_FROM_EMAIL}>",
+    to=[to_addr],
+    reply_to=[reply_email] if reply_email else None,
+    # nagłówek widoczny w kliencie poczty:
+    headers={"From": f"{display_name} <{reply_email or settings.DEFAULT_FROM_EMAIL}>"}
+)
+```
+
+> Uwaga: to **nie omija** ograniczeń serwera – jeśli MTA wymaga, by envelope sender zgadzał się z zalogowanym kontem, i tak użyje/wyegzekwuje `DEFAULT_FROM_EMAIL`.
+
+### Co sprawdzić, gdy „nie dochodzi mail”:
+
+* `DEFAULT_FROM_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS/SSL`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD` – czy są ustawione.
+* Czy `sent = email.send()` zwraca `1`? Jeśli `0`, to serwer nie przyjął wiadomości (błędny FROM/RCPT lub polityka).
+* Logi serwera SMTP. W trybie `DEBUG=True` dodałem dopisanie klasy i treści wyjątku do komunikatu.
+* Szybki test w konsoli:
+
+```python
+from django.core.mail import send_mail
+from django.conf import settings
+send_mail("Test", "Hello", settings.DEFAULT_FROM_EMAIL, ["helpdesk.wilga@brueggen.com"])
+```
+
+Jeśli chcesz, żebym wymusił wysyłkę „prosto z maila z profilu” bez warunków — mogę podmienić `from_email=reply_email` zawsze, ale miej świadomość, że na wielu serwerach (O365, Postfix z SPF/DMARC) to **będzie odrzucane**. Najbezpieczniejszy i produkcyjny wariant to aktualny: `From = DEFAULT_FROM_EMAIL`, `Reply-To = profilowy e-mail`.

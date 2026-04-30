@@ -1,0 +1,46 @@
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+# More info on Python, GitHub Actions, and Azure App Service: https://aka.ms/python-webapps-actions
+
+name: Deploy Python app to Azure Web App - recevio
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AZURE_WEBAPP_NAME: recevio
+  AZURE_WEBAPP_SLOT: Production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    env:
+      AZURE_PUBLISH_PROFILE: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_FCDA519A8C454C82856239BF554ABEED }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify publish profile secret is available
+        run: |
+          if [ -z "$AZURE_PUBLISH_PROFILE" ]; then
+            echo "::error::Secret AZUREAPPSERVICE_PUBLISHPROFILE_FCDA519A8C454C82856239BF554ABEED is empty or not accessible to this workflow."
+            echo "Check: Settings -> Secrets and variables -> Actions -> Repository secrets."
+            echo "If it is an Environment secret, add 'environment: <name>' to this job."
+            exit 1
+          fi
+          echo "Publish profile secret resolved (length=${#AZURE_PUBLISH_PROFILE} chars)."
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        id: deploy-to-webapp
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          slot-name: ${{ env.AZURE_WEBAPP_SLOT }}
+          publish-profile: ${{ env.AZURE_PUBLISH_PROFILE }}
+          package: .

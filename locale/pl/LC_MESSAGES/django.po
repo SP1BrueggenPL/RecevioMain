@@ -1,0 +1,229 @@
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Hygiene and Safety rules for visitors for Wilga"
+msgstr "Zasady bezpieczeństwa i higieny obowiązującymi dla osób odwiedzających dla zakładu Wilga"
+
+msgid "Do you suffer from any illnesses or have other symptoms such as: diarrhoea, vomit, fever, open cutaneous lesions, dark urine?"
+msgstr "Czy jest Pan/Pani chora lub ma Pan/Pani objawy, takie jak: biegunka, wymioty, gorączka, otwarte zmiany skórne, ciemny mocz?"
+
+msgid "Which countries have you visited in the past four weeks?"
+msgstr "Jakie kraje odwiedzał Pan/Pani w ciągu ostatnich 4 tygodni?"
+
+msgid "I have not visited any countries within the last four weeks"
+msgstr "Nie odwiedziłem(-am) żadnych krajów w ciągu ostatnich 4 tygodni"
+
+msgid "Are you allergic to any allergens listed in the provided table?"
+msgstr "Czy jest Pan/Pani uczulony(-a) na którykolwiek z alergenów wymienionych w tabeli?"
+
+msgid "Back"
+msgstr "Powrót"
+
+msgid "Please select the registration method"
+msgstr "Proszę wybrać metodę rejestracji"
+
+msgid "Register using a badge (trusted visitor)"
+msgstr "Rejestracja za pomocą identyfikatora (osoba zaufana)"
+
+msgid "Register using an SMS code"
+msgstr "Rejestracja za pomocą kodu SMS"
+
+msgid "Register without a code or badge"
+msgstr "Rejestracja bez kodu oraz identyfikatora"
+
+msgid "Your registration has been successfully completed."
+msgstr "Rejestracja została pomyślnie zakończona."
+
+msgid "The host has been informed about the completion of your registration"
+msgstr "Osoba, którą Pan/Pani odwiedza, została powiadomiona o zakończeniu rejestracji"
+
+msgid "The color of your label is:"
+msgstr "Kolor przypisanej Panu/Pani etykiety to:"
+
+msgid "A badge is not required for visitors who will not access the production area."
+msgstr "Naklejka nie jest wymagana dla gości nieprzebywających na produkcji."
+
+msgid "You will be redirected to the start screen in a moment..."
+msgstr "Za chwilę nastąpi przekierowanie do ekranu początkowego..."
+
+msgid "Please scan your badge"
+msgstr "Prosimy o zeskanowanie identyfikatora"
+
+msgid "Waiting for the badge to be scanned..."
+msgstr "Oczekiwanie na zeskanowanie identyfikatora, prosimy o chwilę cierpliwości"
+
+msgid "Please enter your registration code"
+msgstr "Proszę wprowadzić kod rejestracyjny"
+
+msgid "Enter the code here"
+msgstr "Proszę wpisać kod w tym miejscu"
+
+msgid "Please enter your visitor identification number"
+msgstr "Proszę wprowadzić numer identyfikacyjny"
+
+msgid "Proceed to the next step"
+msgstr "Przejdź dalej"
+
+msgid "An unexpected error has occurred"
+msgstr "Wystąpił nieoczekiwany błąd"
+
+msgid "Guest details"
+msgstr "Informacje o gościu"
+
+msgid "Other company (if not on the list)"
+msgstr "Inna firma (jeżeli nie została uwzględniona na liście)"
+
+msgid "I do not represent any organization"
+msgstr "Nie reprezentuję żadnej firmy"
+
+msgid "Please select a company, enter it manually, or choose 'no company'"
+msgstr "Proszę wybrać firmę, wprowadzić ją ręcznie lub zaznaczyć opcję „brak firmy”"
+
+msgid "Please enter your badge identification number"
+msgstr "Proszę wprowadzić numer identyfikatora"
+
+msgid "Will you be entering the production area?"
+msgstr "Czy planuje Pan/Pani wejść na obszar produkcyjny?"
+
+msgid "Please confirm that you have read the safety regulations"
+msgstr "Proszę potwierdzić zapoznanie się z zasadami bezpieczeństwa"
+
+msgid "Provide your signature below"
+msgstr "Prosimy o złożenie podpisu poniżej"
+
+msgid "Clear the signature"
+msgstr "Wyczyść podpis"
+
+msgid "Will you be under supervision during your visit?"
+msgstr "Czy podczas wizyty będzie Pan/Pani pod czyjąś opieką?"
+
+msgid "Finish"
+msgstr "Zakończ"
+
+msgid "Job interview"
+msgstr "Rozmowa kwalifikacyjna"
+
+msgid "Audit"
+msgstr "Audyt"
+
+msgid "Business meeting with partners or contractors"
+msgstr "Spotkanie biznesowe / kontrahentów"
+
+msgid "Strategic meeting"
+msgstr "Spotkanie strategiczne"
+
+msgid "Training session"
+msgstr "Szkolenie"
+
+msgid "Service or maintenance visit"
+msgstr "Serwis / naprawa"
+
+msgid "Educational or school visit"
+msgstr "Wizyty edukacyjne i szkolne"
+
+msgid "Other purpose"
+msgstr "Inne"
+
+msgid "--- Select ---"
+msgstr "--- Wybierz ---"
+
+msgid "Green (moving around the factory without a host)"
+msgstr "Zielony (poruszanie się po zakładzie bez opiekuna)"
+
+msgid "Red (moving around the factory only with a host)"
+msgstr "Czerwony (poruszanie się po zakładzie wyłącznie z opiekunem)"
+
+msgid "Back to Start"
+msgstr "Powrót na Start"
+
+msgid "Did you receive a badge (ID) for your visit?"
+msgstr "Czy Panu/Pani został przekazany identyfikator (ID)?"
+
+msgid "Purpose of Visit"
+msgstr "Cel wizyty"
+
+msgid "Enter custom purpose"
+msgstr "Proszę wprowadzić inny cel"
+
+msgid "Audit Start Date"
+msgstr "Data rozpoczęcia audytu"
+
+msgid "Audit End Date"
+msgstr "Data zakończenia audytu"
+
+msgid "Other company (if not listed)"
+msgstr "Inna firma (jeżeli nie została uwzględniona na liście)"
+
+msgid "I do not represent any company"
+msgstr "Nie reprezentuję żadnej firmy"
+
+msgid "First name"
+msgstr "Imię"
+
+msgid "Last name"
+msgstr "Nazwisko"
+
+msgid "Phone"
+msgstr "Telefon"
+
+msgid "Factory"
+msgstr "Firma"
+
+msgid "Host"
+msgstr "Osoba przyjmująca"
+
+msgid "Please select a company, enter one manually, or check 'no company'."
+msgstr "Proszę wybrać firmę, wprowadzić ją ręcznie lub zaznaczyć opcję „brak firmy”."
+
+msgid "Signed"
+msgstr "Podpisano"
+
+msgid "Other Purpose"
+msgstr "Inny cel"
+
+msgid "Please select a company, type one or confirm you don't represent any."
+msgstr "Proszę wybrać firmę, wprowadzić ją ręcznie lub potwierdzić, że nie reprezentują Państwo żadnej."
+
+msgid "Enter your badge ID"
+msgstr "Proszę wprowadzić numer identyfikatora"
+
+msgid "Badge ID"
+msgstr "Numer identyfikatora"
+
+msgid "Continue"
+msgstr "Kontynuuj"
+
+msgid "There are allergen zones on the premises. If you are allergic to any of the following allergens, please report this to your supervisor at Brüggen Polska."
+msgstr "Na terenie zakładu występują strefy alergenne. Osoby uczulone na poniższe alergeny prosimy o zgłoszenie tego faktu opiekunowi z Brüggen Polska."
+
+msgid "Access to the production area is not allowed."
+msgstr "Brak dostępu do obszaru produkcyjnego."
+
+msgid "Your answer indicates that you cannot enter the production area for safety reasons."
+msgstr "Państwa odpowiedź wskazuje, że nie mogą Państwo wejść na obszar produkcyjny ze względów bezpieczeństwa."
+
+msgid "Please contact the reception or your host for further instructions."
+msgstr "Prosimy o kontakt z recepcją lub gospodarzem wizyty w celu uzyskania dalszych instrukcji."
+
+msgid "Identification form"
+msgstr "Formularz identyfikacyjny"
+
+msgid "SMS code"
+msgstr "Kod SMS"
+
+msgid "Exit (only badge)"
+msgstr "Wyjście (tylko pestki)"
+
+msgid "Please scan your badge to finish your visit"
+msgstr "Proszę zeskanować swoją pestkę, aby zakończyć wizytę."
+
+msgid "No active visit found for this badge today. If this is a mistake, please contact reception."
+msgstr "Dzisiaj nie odnotowano żadnych aktywnych wizyt związanych z tą pestką. Jeśli jest to pomyłka, prosimy o kontakt z recepcją."
+
+msgid "Your visit has been finished. Thank you!"
+msgstr "Twoja wizyta dobiegła końca. Dziękujemy!"
+
+msgid "Badge"
+msgstr "Pestka"

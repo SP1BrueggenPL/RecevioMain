@@ -1,0 +1,14 @@
+{% comment %} expects: status in ['ok','timeout','error','pending','skipped','no_number'] {% endcomment %}
+{% if status == 'ok' %}
+  <span class="badge bg-success">OK</span>
+{% elif status == 'timeout' %}
+  <span class="badge bg-warning text-dark">Timeout</span>
+{% elif status == 'error' %}
+  <span class="badge bg-danger">Error</span>
+{% elif status == 'skipped' %}
+  <span class="badge bg-secondary">Skipped</span>
+{% elif status == 'no_number' %}
+  <span class="badge bg-secondary">No number</span>
+{% else %}
+  <span class="badge bg-light text-dark">Pending</span>
+{% endif %}

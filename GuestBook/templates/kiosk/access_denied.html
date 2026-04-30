@@ -1,0 +1,57 @@
+{% extends "base_kioskb.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 1.5rem; color: #cc6884;">
+    {% trans "Access to the production area is not allowed." %}
+  </h1>
+
+  <h3 style="font-size: 2.2rem; margin-bottom: 1rem;">
+    {% trans "Your answer indicates that you cannot enter the production area for safety reasons." %}
+  </h3>
+
+  <h3 style="font-size: 2rem; margin-bottom: 2rem;">
+    {% trans "Please contact the reception or your host for further instructions." %}
+  </h3>
+
+  <p style="margin-top: 2rem; font-style: italic; font-size: 1.8rem; color: #514b51;">
+    {% trans "You will be redirected to the start screen in a moment..." %}
+  </p>
+
+  <div style="margin-top: 3rem;">
+    <a href="{% url 'start' %}"
+       style="
+         display: inline-block;
+         width: 300px;
+         height: 100px;
+         line-height: 100px;
+         font-size: 2rem;
+         background-color: #514b51;
+         color: white;
+         text-decoration: none;
+         border-radius: 12px;
+         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+       ">
+      {% trans "Back to Start" %}
+    </a>
+  </div>
+</div>
+
+<script>
+  setTimeout(function() {
+    window.location.href = "{% url 'start' %}";
+  }, 60000); // 60 sekund
+</script>
+{% endblock %}

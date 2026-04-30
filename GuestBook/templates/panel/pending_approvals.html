@@ -1,0 +1,90 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+
+{% block content %}
+<section class="intro-single mt-5">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="title-single-box">
+          <br>
+          <br>
+          <br>
+      <h1 class="title-single">Pending Approvals</h1>
+
+    {% if unapproved_visitors %}
+      <div class="table-responsive">
+        <table class="table table-bordered table-striped">
+          <thead class="thead-dark">
+  <tr>
+    <th>Name</th>
+    <th>Visitor ID</th>
+    <th>Company</th>
+    <th>Registered</th>
+    <th>Send</th>
+    <th>Print</th>
+    <th>Action</th>
+  </tr>
+</thead>
+<tbody>
+  {% for visitor in unapproved_visitors %}
+    <tr>
+      <td>{{ visitor.first_name }} {{ visitor.last_name }}</td>
+      <td>{{ visitor.visitor_id }}</td>
+      <td>
+        {% if visitor.factory %}
+          {{ visitor.factory.company_name }}
+        {% elif visitor.company_name_text %}
+          {{ visitor.company_name_text }}
+        {% else %}
+          <span class="text-muted">No company</span>
+        {% endif %}
+      </td>
+      <td>{{ visitor.start_time|date:"d.m.Y H:i" }}</td>
+
+      <td>
+        {% if visitor.sms_status == "sent" %}
+          <span class="badge bg-success">OK</span>
+        {% elif visitor.sms_status == "timeout" %}
+          <span class="badge bg-warning text-dark">Timeout</span>
+        {% elif visitor.sms_status == "error" %}
+          <span class="badge bg-danger">Error</span>
+        {% elif visitor.sms_status == "skipped" %}
+          <span class="badge bg-secondary">Skipped</span>
+        {% else %}
+          <span class="badge bg-light text-dark">Pending</span>
+        {% endif %}
+      </td>
+
+      <td>
+        {% if visitor.print_status == "printed" %}
+          <span class="badge bg-success">OK</span>
+        {% elif visitor.print_status == "timeout" %}
+          <span class="badge bg-warning text-dark">Timeout</span>
+        {% elif visitor.print_status == "error" %}
+          <span class="badge bg-danger">Error</span>
+        {% elif visitor.print_status == "skipped" %}
+          <span class="badge bg-secondary">Skipped</span>
+        {% else %}
+          <span class="badge bg-light text-dark">Pending</span>
+        {% endif %}
+      </td>
+
+      <td>
+        <a href="{% url 'approve_visitor' visitor.pk %}" class="btn btn-primary btn-sm">Review</a>
+      </td>
+    </tr>
+  {% endfor %}
+</tbody>
+
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-info">No registrations waiting for approval.</div>
+    {% endif %}
+  </div>
+  </div>
+                </div>
+      </div>
+</section>
+{% endblock %}

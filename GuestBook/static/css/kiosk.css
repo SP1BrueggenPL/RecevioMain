@@ -1,0 +1,49 @@
+
+body {
+    background-color: #fdfdfd;
+    font-family: 'Segoe UI', sans-serif;
+    color: #514b51;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+}
+
+.container {
+    max-width: 600px;
+    width: 90%;
+    background-color: #ffffff;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.1);
+    text-align: center;
+}
+
+h1, h2, h3 {
+    color: #661c31;
+}
+
+button, input[type=submit] {
+    background-color: #ff4143;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    margin-top: 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    cursor: pointer;
+}
+
+button:hover, input[type=submit]:hover {
+    background-color: #cc6884;
+}
+
+input[type=text], input[type=email], input[type=tel], select {
+    width: 100%;
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    font-size: 1rem;
+}

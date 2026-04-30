@@ -1,0 +1,97 @@
+{% extends 'base_kiosk.html' %}
+{% load static i18n %}
+{% get_current_language as LANGUAGE %}
+
+{% block content %}
+<style>
+  body, html {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .page-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    height: 100%;
+    padding: 0.5rem 0.5rem 0.3rem 0.5rem;
+    box-sizing: border-box;
+  }
+
+  .bhp-title {
+    font-size: 1.8rem; /* ✅ Jeszcze mniejszy nagłówek */
+    margin: 0.1rem 0;
+  }
+
+  .bhp-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.8rem;
+    flex: 1;
+    max-height: calc(100% - 140px); /* ✅ Automatyczne dopasowanie */
+    width: 100%;
+  }
+
+  .bhp-wrapper img {
+    height: 100%;
+    max-width: 48%;
+    object-fit: contain;
+    box-shadow: 0 0 8px rgba(0,0,0,0.2);
+    border-radius: 6px;
+  }
+
+  .confirm-button {
+    background-color: #cc6884;
+    color: white;
+    padding: 0.5rem 1.2rem;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.3rem;
+    cursor: pointer;
+    box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+    height: 65px; /* ✅ Jeszcze mniejszy */
+  }
+
+  .logo-container {
+    position: fixed;
+    top: 0.5rem;
+    right: 1rem;
+    z-index: 1000;
+  }
+
+  .logo-container img {
+    max-height: 100px; /* ✅ Logo trochę mniejsze */
+  }
+</style>
+
+<div class="logo-container">
+  <img src="{% static 'logo.png' %}" alt="Logo">
+</div>
+
+<div class="page-container">
+  <h2 class="bhp-title">
+    {% trans "Hygiene and Safety rules for visitors for Wilga" %}
+  </h2>
+
+  <div class="bhp-wrapper">
+    {% if LANGUAGE == "pl" %}
+      <img src="{% static 'bhp_images/bhp_page_1.png' %}" alt="BHP Page 1">
+      <img src="{% static 'bhp_images/bhp_page_2.png' %}" alt="BHP Page 2">
+    {% else %}
+      <img src="{% static 'bhp_images_en/bhp_en_page_1.png' %}" alt="BHP EN Page 1">
+      <img src="{% static 'bhp_images_en/bhp_en_page_2.png' %}" alt="BHP EN Page 2">
+    {% endif %}
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit" class="confirm-button">
+      {% trans "Please confirm that you have read the safety regulations" %}
+    </button>
+  </form>
+</div>
+{% endblock %}

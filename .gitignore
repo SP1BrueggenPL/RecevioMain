@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+myvenv/
+
+# Django
+db.sqlite3
+debug.log*
+sms.log
+media/
+
+# Environment variables
+.env
+
+# IDE
+.idea/
+
+# Requirements apps (local SDK)
+requirements_apps/
+
+# Logs
+*.log
+*.log.*

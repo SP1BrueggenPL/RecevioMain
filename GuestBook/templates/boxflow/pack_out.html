@@ -1,0 +1,107 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+{% block content %}
+  <br>
+  <br>
+  <section class="intro-single py-4 d-flex align-items-start justify-content-center">
+
+
+  <div class="card shadow-sm p-4" style="max-width: 560px; width: 100%;">
+    <h1 class="h3 text-center mb-1">PackOut</h1>
+    <p class="text-muted text-center mb-4">Scan the label, select the recipient, and confirm.</p>
+
+    <form method="post" id="packout-form" autocomplete="off" target="_self">
+      {% csrf_token %}
+      <input type="hidden" name="action" id="action-field" value="">
+      <input type="hidden" id="code-len" value="10">
+
+      <!-- KROK 1: skan kodu -->
+      <div class="mb-3">
+        <label class="form-label" for="{{ form.code.id_for_label }}">{{ form.code.label }}</label>
+        {% if show_confirm %}
+          {# podczas potwierdzenia blokujemy edycję kodu #}
+          {{ form.code.as_widget }}
+          <script>
+            // ustaw readonly dopiero w kroku potwierdzenia
+            document.addEventListener('DOMContentLoaded', () => {
+              const el = document.getElementById('{{ form.code.id_for_label }}');
+              if (el) el.readOnly = true;
+            });
+          </script>
+        {% else %}
+          {{ form.code }}
+        {% endif %}
+        {% if form.errors.code %}
+          <div class="invalid-feedback d-block">{{ form.errors.code|striptags }}</div>
+        {% endif %}
+      </div>
+
+      {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+      {% endif %}
+
+      <!-- KROK 2: potwierdzenie wydania (pokazujemy tylko po poprawnym skanie) -->
+      {% if show_confirm %}
+        <hr class="my-3">
+
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.collected_by.id_for_label }}">{{ form.collected_by.label }}</label>
+          {{ form.collected_by }}
+          {% if form.errors.collected_by %}
+            <div class="invalid-feedback d-block">{{ form.errors.collected_by|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.collected_by_other.id_for_label }}">{{ form.collected_by_other.label }}</label>
+          {{ form.collected_by_other }}
+          {% if form.errors.collected_by_other %}
+            <div class="invalid-feedback d-block">{{ form.errors.collected_by_other|striptags }}</div>
+          {% endif %}
+        </div>
+
+        <div class="d-flex gap-2">
+          <a class="btn btn-outline-secondary" href="{% url 'boxflow_out' %}">Cancel</a>
+          <button class="btn btn-success" type="submit"
+                  onclick="document.getElementById('action-field').value='confirm'">
+            Confirm
+          </button>
+        </div>
+      {% endif %}
+    </form>
+  </div>
+</section>
+
+<script>
+(function () {
+  const form = document.getElementById('packout-form');
+  const codeInput = document.getElementById('{{ form.code.id_for_label }}');
+  const requiredLen = parseInt(document.getElementById('code-len').value || '10', 10);
+
+  // autofocus na GET/kroku 1
+  {% if not show_confirm %}
+  if (codeInput) codeInput.focus();
+  {% endif %}
+
+  // autosubmit po 10 znakach (tylko w kroku 1)
+  {% if not show_confirm %}
+  if (codeInput) {
+    let submitted = false;
+    const trySubmit = () => {
+      if (submitted) return;
+      const val = (codeInput.value || '').trim();
+      if (val.length >= requiredLen) {
+        submitted = true;
+        form.submit();
+      }
+    };
+    // skanery zwykle wpisują znaki + Enter — obsłuż obie ścieżki
+    codeInput.addEventListener('input', trySubmit);
+    codeInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); trySubmit(); }
+    });
+  }
+  {% endif %}
+})();
+</script>
+{% endblock %}

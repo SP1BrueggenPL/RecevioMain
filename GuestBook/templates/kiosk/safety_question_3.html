@@ -1,0 +1,85 @@
+{% extends 'base_kiosk.html' %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 30px;
+">
+  <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: normal; word-break: break-word;">
+    {% trans "Hygiene and Safety rules for visitors for Wilga" %}
+  </h1>
+
+  <form method="post" style="font-size: 2rem;">
+    {% csrf_token %}
+    <p style="font-size: 2rem; margin-bottom: 2rem;">
+      {% trans "Are you allergic to any allergens listed in the provided table?" %}
+    </p>
+
+    <div style="margin-bottom: 1rem; text-align: center;">
+      <label style="margin-right: 80px; font-size: 2rem;">
+        <input type="radio" name="question_3" value="{% trans 'Yes' %}" required
+               style="transform: scale(2); margin-right: 15px;"
+               onchange="showWarning(this.value)">
+        {% trans "Yes" %}
+      </label>
+      <label style="font-size: 2rem;">
+        <input type="radio" name="question_3" value="{% trans 'No' %}"
+               style="transform: scale(2); margin-right: 15px;"
+               onchange="showWarning(this.value)">
+        {% trans "No" %}
+      </label>
+    </div>
+
+    <div style="margin: 2rem 0; text-align: center;">
+      {% if LANGUAGE == "pl" %}
+      <img src="{% static 'alergeny_pl.png' %}" alt="{% trans 'Allergens table' %}" style="max-width: 100%; height: 30%; border: 2px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+      {% else %}
+      <img src="{% static 'alergeny_en.png' %}" alt="{% trans 'Allergens table' %}" style="max-width: 100%; height: 30%; border: 2px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+      {% endif %}
+    </div>
+
+    <!-- ✅ Tu pojawi się komunikat -->
+    <div id="warning-message"
+         style="display: none; color: #cc6884; font-size: 1.8rem; margin-bottom: 2rem; font-weight: bold;">
+      {% trans "There are allergen zones on the premises. If you are allergic to any of the following allergens, please report this to your supervisor at Brüggen Polska." %}
+    </div>
+
+    <div style="text-align: center;">
+      <button type="submit"
+        style="
+          width: 320px;
+          height: 100px;
+          font-size: 2rem;
+          background-color: #cc6884;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+        <b>{% trans "Continue" %}</b>
+      </button>
+    </div>
+  </form>
+</div>
+
+<script>
+function showWarning(value) {
+    const warning = document.getElementById("warning-message");
+    if (value.toLowerCase() === "{% trans 'Yes' %}".toLowerCase()) {
+        warning.style.display = "block";
+    } else {
+        warning.style.display = "none";
+    }
+}
+</script>
+{% endblock %}

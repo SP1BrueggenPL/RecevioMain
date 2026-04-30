@@ -1,0 +1,180 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+
+<style>
+  input[type="text"],
+  input[type="tel"],
+  input[type="date"],
+  select {
+    width: 100%;
+    height: 70px;
+    font-size: 2rem;
+    padding: 10px 15px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+    margin-bottom: 10px;
+  }
+
+  select {
+    height: 80px;
+  }
+
+  input[type="checkbox"] {
+    transform: scale(2);
+    margin-right: 15px;
+  }
+</style>
+
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 10%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 20px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 120px;">
+</div>
+
+<div style="
+    width: 90%;
+    max-width: 1400px;
+    height: calc(100vh - 180px);
+    margin: auto;
+    padding: 3rem;
+    text-align: center;
+    overflow-y: auto;
+    box-sizing: border-box;
+">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: nowrap;">
+    {% trans "Guest details" %}
+  </h1>
+
+  <form method="post" autocomplete="off" style="font-size: 2rem; max-width: 800px; margin: auto; text-align: left;">
+    {% csrf_token %}
+
+    <b><label for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label></b><br>
+    {{ form.first_name }}<br><br>
+
+    <b><label for="{{ form.last_name.id_for_label }}">{{ form.last_name.label }}</label></b><br>
+    {{ form.last_name }}<br><br>
+
+    <b><label for="{{ form.phone.id_for_label }}">{{ form.phone.label }}</label></b><br>
+    {{ form.phone }}<br><br>
+
+    <b><label for="{{ form.factory.id_for_label }}">{{ form.factory.label }}</label></b>
+    {{ form.factory }}<br>
+  <br>
+    <div id="other-company-wrapper" style="display: none;">
+      <b><label for="{{ form.other_company.id_for_label }}">{{ form.other_company.label }}</label></b>
+      {{ form.other_company }}<br><br>
+    </div>
+
+    <div id="no-company-wrapper" style="display: none;">
+      <label>
+        {{ form.no_company }} {{ form.no_company.label }}
+      </label>
+    </div>
+  <br>
+    <b><label for="{{ form.visit_purpose_choice.id_for_label }}">{{ form.visit_purpose_choice.label }}</label></b><br>
+    {{ form.visit_purpose_choice }}<br><br>
+
+    <div id="other-purpose-wrapper" style="display: none;">
+      <b><label for="{{ form.other_purpose.id_for_label }}">{{ form.other_purpose.label }}</label></b><br>
+      {{ form.other_purpose }}<br><br>
+    </div>
+
+    <div id="audit-dates-wrapper" style="display: none;">
+      <b><label for="{{ form.audit_start_date.id_for_label }}">{{ form.audit_start_date.label }}</label></b><br>
+      {{ form.audit_start_date }}<br><br>
+
+      <b><label for="{{ form.audit_end_date.id_for_label }}">{{ form.audit_end_date.label }}</label></b><br>
+      {{ form.audit_end_date }}<br><br>
+    </div>
+
+    <b><label for="{{ form.host.id_for_label }}">{{ form.host.label }}</label></b><br>
+    {{ form.host }}<br><br>
+
+    <div style="text-align: center; margin-top: 2rem;">
+      <input type="submit" value="{% trans 'Continue' %}"
+        style="
+          width: 300px;
+          height: 100px;
+          font-size: 2rem;
+          background-color: #ff4143;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+    </div>
+  </form>
+</div>
+
+<script>
+  function handleCompanyChange() {
+    const factorySelect = document.getElementById("id_factory");
+    const otherWrapper = document.getElementById("other-company-wrapper");
+    const noCompanyWrapper = document.getElementById("no-company-wrapper");
+
+    if (!factorySelect.value) {
+      otherWrapper.style.display = "block";
+      noCompanyWrapper.style.display = "block";
+    } else {
+      otherWrapper.style.display = "none";
+      noCompanyWrapper.style.display = "none";
+      document.getElementById("id_other_company").value = "";
+      document.getElementById("id_no_company").checked = false;
+    }
+  }
+
+  function handleVisitPurposeChange() {
+    const purposeSelect = document.getElementById("id_visit_purpose_choice");
+    const otherPurposeWrapper = document.getElementById("other-purpose-wrapper");
+    const auditDatesWrapper = document.getElementById("audit-dates-wrapper");
+
+    const selected = purposeSelect.value;
+    otherPurposeWrapper.style.display = selected === "other" ? "block" : "none";
+    auditDatesWrapper.style.display = selected === "audit" ? "block" : "none";
+  }
+
+  document.addEventListener("DOMContentLoaded", function () {
+    const factorySelect = document.getElementById("id_factory");
+    const hostSelect = document.getElementById("id_host");
+
+    if (factorySelect) {
+      factorySelect.addEventListener("change", handleCompanyChange);
+      handleCompanyChange();
+
+      factorySelect.addEventListener("change", function () {
+        const selectedFactoryId = this.value;
+        if (!selectedFactoryId) return;
+
+        fetch(`/pl/api/get-host/?company_id=${selectedFactoryId}`)
+          .then(response => response.json())
+          .then(data => {
+            if (data.host_id && data.host_name) {
+              for (let i = 0; i < hostSelect.options.length; i++) {
+                if (hostSelect.options[i].value == data.host_id) {
+                  hostSelect.selectedIndex = i;
+                  break;
+                }
+              }
+            }
+          })
+          .catch(error => console.error('Error fetching host:', error));
+      });
+    }
+
+    const purposeSelect = document.getElementById("id_visit_purpose_choice");
+    if (purposeSelect) {
+      purposeSelect.addEventListener("change", handleVisitPurposeChange);
+      handleVisitPurposeChange();
+    }
+  });
+</script>
+{% endblock %}

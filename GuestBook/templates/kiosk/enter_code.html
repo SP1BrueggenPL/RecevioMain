@@ -1,0 +1,66 @@
+{% extends 'base_kiosk.html' %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+  <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h2 style="font-size: 3rem; margin-bottom: 2rem; white-space: nowrap;">
+    {% trans "Please enter your registration code" %}
+  </h2>
+
+  {% if error %}
+    <div style="
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 1rem;
+        border-radius: 8px;
+        font-size: 1.8rem;
+        margin-bottom: 2rem;
+        display: inline-block;
+        max-width: 600px;">
+      {{ error }}
+    </div>
+  {% endif %}
+
+  <form method="post" style="font-size: 2rem;">
+    {% csrf_token %}
+    <div style="margin-bottom: 2rem;">
+      <input type="text" name="code" maxlength="6"
+        style="
+          text-align: center;
+          font-size: 2.5rem;
+          padding: 15px;
+          width: 300px;
+          border: 2px solid #ccc;
+          border-radius: 8px;
+        "
+        placeholder="{% trans 'Enter the code here' %}" required>
+    </div>
+
+    <button type="submit"
+      style="
+        width: 300px;
+        height: 100px;
+        font-size: 2rem;
+        background-color: #cc6884;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      ">
+      <b>{% trans "Continue" %}</b>
+    </button>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,115 @@
+{% extends "base_panel.html" %}
+{% block content %}
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">Edit Visitor</h1>
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="row">
+              <!-- Dane osobowe -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">First Name</label>
+                <input type="text" name="first_name" class="form-control" value="{{ visitor.first_name }}" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Last Name</label>
+                <input type="text" name="last_name" class="form-control" value="{{ visitor.last_name }}" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Phone</label>
+                <input type="text" name="phone" class="form-control" value="{{ visitor.phone }}">
+              </div>
+
+              <!-- Firma i host -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Company</label>
+                <select name="factory" class="form-select">
+                  <option value="">---</option>
+                  {% for company in companies %}
+                    <option value="{{ company.id }}" {% if visitor.factory and visitor.factory.id == company.id %}selected{% endif %}>
+                      {{ company.company_name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Host</label>
+                <select name="host" class="form-select">
+                  <option value="">---</option>
+                  {% for h in hosts %}
+                    <option value="{{ h.id }}" {% if visitor.host and visitor.host.id == h.id %}selected{% endif %}>
+                      {{ h.host_name }}
+                    </option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- Production Area / Supervision -->
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="production_area" {% if visitor.production_area %}checked{% endif %}>
+                <label class="form-check-label">Production Area</label>
+              </div>
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="with_supervision" {% if visitor.with_supervision %}checked{% endif %}>
+                <label class="form-check-label">With Supervision</label>
+              </div>
+
+              <!-- Safety Questions -->
+              <div class="col-md-12 mt-3">
+                <h5>Safety Questions</h5>
+              </div>
+              <div class="col-md-12 mb-3">
+                <label class="form-label">Question 1</label>
+                <input type="text" name="safety_question_1" class="form-control" value="{{ visitor.safety_question_1 }}">
+              </div>
+              <div class="col-md-12 mb-3">
+                <label class="form-label">Question 2</label>
+                <input type="text" name="safety_question_2" class="form-control" value="{{ visitor.safety_question_2 }}">
+              </div>
+              <div class="col-md-12 mb-3">
+                <label class="form-label">Question 3</label>
+                <input type="text" name="safety_question_3" class="form-control" value="{{ visitor.safety_question_3 }}">
+              </div>
+
+              <!-- Daty audytu -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Audit Start Date</label>
+                <input type="date" name="audit_start_date" class="form-control" value="{{ visitor.audit_start_date|date:'Y-m-d' }}">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Audit End Date</label>
+                <input type="date" name="audit_end_date" class="form-control" value="{{ visitor.audit_end_date|date:'Y-m-d' }}">
+              </div>
+
+              <!-- End Time -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">End Time</label>
+                <input type="datetime-local" name="end_time" class="form-control"
+                       value="{{ visitor.end_time|date:'Y-m-d\\TH:i' }}">
+              </div>
+
+              <!-- Approved / Badge Returned -->
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="approved" {% if visitor.approved %}checked{% endif %}>
+                <label class="form-check-label">Approved</label>
+              </div>
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="badge_returned" {% if visitor.badge_returned %}checked{% endif %}>
+                <label class="form-check-label">Badge Returned</label>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Save</button>
+            <a href="{% url 'visitor_detail' visitor.id %}" class="btn btn-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

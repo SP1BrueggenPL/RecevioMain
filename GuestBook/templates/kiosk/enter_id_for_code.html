@@ -1,0 +1,145 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 100px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: nowrap;">
+    {% trans "Please enter your visitor identification number" %}
+  </h1>
+
+  <form method="post" style="font-size: 2rem;">
+    {% csrf_token %}
+    <input
+  id="visitor-id"
+  class="kb-alpha"
+  type="text"
+  name="visitor_id"
+  maxlength="3"
+  pattern=".{3}"
+  required
+  title="Wpisz dokładnie 3 znaki"
+  style="padding:15px;width:60%;max-width:500px;font-size:2rem;border:2px solid #ccc;border-radius:8px;margin-bottom:2rem;"
+>
+<br>
+
+    <input type="submit" value="{% trans 'Continue' %}"
+      style="
+        width: 300px;
+        height: 100px;
+        font-size: 2rem;
+        background-color: #ff4143;
+        color: white;
+        border: none;
+        border-radius: 12px;
+        cursor: pointer;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      ">
+  </form>
+</div>
+
+<script>
+(() => {
+  const MAX = 3;
+  const input = document.getElementById('visitor-id');
+  if (!input) return;
+  const form = input.closest('form');
+
+  // --- 1) Twardy limiter: nadpisujemy setter .value tylko dla TEGO inputa
+  const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+  if (desc && desc.configurable && desc.set && desc.get) {
+    Object.defineProperty(input, 'value', {
+      get() { return desc.get.call(this); },
+      set(v) { desc.set.call(this, String(v ?? '').slice(0, MAX)); }
+    });
+  }
+
+  // --- 2) Przycinanie setRangeText (gdy coś wstawiane z zaznaczeniem)
+  if (input.setRangeText) {
+    const origSRT = input.setRangeText.bind(input);
+    input.setRangeText = function (text, start, end, mode) {
+      const sel = Math.abs(this.selectionEnd - this.selectionStart);
+      const allow = MAX - (this.value.length - sel);
+      return origSRT((allow > 0 ? String(text).slice(0, allow) : ''), start, end, mode);
+    };
+  }
+
+  // --- 3) Fizyczna klawiatura + wklejanie
+  input.addEventListener('beforeinput', (e) => {
+    if (e.inputType && e.inputType.startsWith('delete')) return;
+    const sel = Math.abs(input.selectionEnd - input.selectionStart);
+    const next = input.value.length - sel + (e.data ? e.data.length : 0);
+    if (next > MAX) e.preventDefault();
+  });
+  input.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const t = (e.clipboardData || window.clipboardData).getData('text') || '';
+    const sel = Math.abs(input.selectionEnd - input.selectionStart);
+    const allow = MAX - (input.value.length - sel);
+    if (allow > 0) input.setRangeText(t.slice(0, allow), input.selectionStart, input.selectionEnd, 'end');
+  });
+
+  // --- 4) Blokada submitu: dokładnie 3 znaki
+  form?.addEventListener('submit', (e) => {
+    if (input.value.length !== MAX) {
+      e.preventDefault();
+      input.setCustomValidity('Wpisz dokładnie 3 znaki');
+      input.reportValidity();
+      setTimeout(() => input.setCustomValidity(''), 200);
+    }
+  });
+
+  // --- 5) Hook na klawiaturę WIRTUALNĄ (alfa)
+  (function hookAlpha() {
+    if (typeof window.typeKey !== 'function') { requestAnimationFrame(hookAlpha); return; }
+    const orig = window.typeKey;
+    window.typeKey = function (k) {
+      if (window.activeInput === input) {
+        let v = input.value;
+        if (k === 'backspace') v = v.slice(0, -1);
+        else if (k === 'space') { if (v.length < MAX) v += ' '; }
+        else if (typeof k === 'string' && k.length === 1) { if (v.length < MAX) v += k; }
+        input.value = v; // setter przytnie do MAX
+        input.focus();
+        if (typeof window.resetKeyboardTimeout === 'function') window.resetKeyboardTimeout();
+        return;
+      }
+      orig(k);
+      if (window.activeInput === input) input.value = input.value; // wyzwól setter (przycięcie)
+    };
+  })();
+
+  // --- 6) (opcjonalnie) hook na klawiaturę numeryczną
+  (function hookNum() {
+    if (typeof window.typeNumKey !== 'function') { requestAnimationFrame(hookNum); return; }
+    const orig = window.typeNumKey;
+    window.typeNumKey = function (k) {
+      if (window.activeInput === input) {
+        let v = input.value;
+        if (k === 'backspace') v = v.slice(0, -1);
+        else if (k === 'enter') { if (typeof window.hideKeyboardNum === 'function') window.hideKeyboardNum(); }
+        else if (typeof k === 'string' && k.length === 1) { if (v.length < MAX) v += k; }
+        input.value = v; // setter przytnie do MAX
+        input.focus();
+        if (typeof window.resetKeyboardNumTimeout === 'function') window.resetKeyboardNumTimeout();
+        return;
+      }
+      orig(k);
+      if (window.activeInput === input) input.value = input.value;
+    };
+  })();
+})();
+</script>
+
+
+{% endblock %}

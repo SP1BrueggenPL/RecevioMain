@@ -1,0 +1,84 @@
+{% extends "base_kiosk.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div class="text-center mt-5">
+  <h1 class="mb-5" style="font-size: 3rem; text-align:center">
+    {% trans "Please select the registration method" %}
+  </h1>
+
+  <div class="registration-options">
+    <!-- Rejestracja standardowa -->
+    <div class="method">
+      <a href="{% url 'enter_id' %}" class="square-btn">
+        <img src="{% static 'images/manual_registration.png' %}" alt="Manual Registration" style="max-width: 80%; max-height: 80%;">
+      </a>
+      <p><b>{% trans "Identification form" %}</b></p>
+    </div>
+
+    <!-- Rejestracja kodem SMS -->
+    <div class="method">
+      <a href="{% url 'enter_code' %}" class="square-btn">
+        <img src="{% static 'images/sms_code.png' %}" alt="SMS Code" style="max-width: 80%; max-height: 80%;">
+      </a>
+      <p><b>{% trans "SMS code" %}</b></p>
+    </div>
+
+    <!-- Rejestracja pestką (chipem) -->
+    <div class="method">
+      <a href="{% url 'enter_badge' %}" class="square-btn">
+        <img src="{% static 'images/chip.png' %}" alt="badge" style="max-width: 80%; max-height: 80%;">
+      </a>
+      <p><b>{% trans "Badge" %}</b></p>
+    </div>
+    <!-- WYJŚCIE (skan breloka na wyjście) -->
+  <div class="method">
+  <a href="{% url 'exit_badge' %}" class="square-btn" style="background-color:#555;">
+    <img src="{% static 'images/exit.png' %}" alt="Exit" style="max-width: 80%; max-height: 80%;">
+  </a>
+  <p><b>{% trans "Exit (only badge)" %}</b></p>
+  </div>
+
+  </div>
+</div>
+
+<style>
+.registration-options {
+  display: flex;
+  justify-content: center;
+  gap: 60px;
+  flex-wrap: wrap;
+  padding: 2rem;
+  text-align: center;
+}
+
+.square-btn {
+  width: 300px;
+  height: 300px;
+  background-color: #cc6884;
+  border-radius: 20px;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: transform 0.2s ease-in-out;
+}
+
+.square-btn:hover {
+  transform: scale(1.05);
+  background-color: #a24e6a;
+}
+
+.method p {
+  margin-top: 10px;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .square-btn {
+    width: 200px;
+    height: 200px;
+  }
+}
+</style>
+{% endblock %}

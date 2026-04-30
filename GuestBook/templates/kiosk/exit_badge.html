@@ -1,0 +1,59 @@
+{% extends "base_kiosk.html" %}
+{% load i18n %}
+
+{% block content %}
+<div class="container text-center mt-5" style="max-width: 900px; margin: auto; padding: 3rem;">
+  <h2 class="mb-5" style="font-size: 3rem; font-weight: bold;">
+    {% trans "Please scan your badge to finish your visit" %}
+  </h2>
+
+  <form method="post" id="badgeForm" style="display:none;">
+    {% csrf_token %}
+    <input type="hidden" name="badge_id" id="badgeInput">
+  </form>
+
+  {% if error %}
+    <div class="alert alert-warning" style="font-size:1.4rem;">{{ error }}</div>
+  <br>
+  <div style="margin-top: 3rem;">
+    <a href="{% url 'start' %}"
+       style="
+         display: inline-block;
+         width: 300px;
+         height: 100px;
+         line-height: 100px;
+         font-size: 2rem;
+         background-color: #514b51;
+         color: white;
+         text-decoration: none;
+         border-radius: 12px;
+         box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+       ">
+      {% trans "Back to Start" %}
+    </a>
+  </div>
+  {% else %}
+    <div id="status" class="mt-4 text-muted" style="font-size: 2rem; color:#514b51; font-weight:500;">
+      {% trans "Waiting for the badge to be scanned..." %}
+    </div>
+  {% endif %}
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  let buffer = "";
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (buffer.length > 0) {
+        document.getElementById("badgeInput").value = buffer;
+        document.getElementById("badgeForm").submit();
+        buffer = "";
+      }
+    } else if (e.key.length === 1) {
+      buffer += e.key;
+    }
+  });
+});
+</script>
+{% endblock %}

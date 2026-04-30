@@ -1,0 +1,146 @@
+{% extends 'base_panel.html' %}
+{% load static i18n %}
+
+{% block content %}
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-12">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">{% trans "Your Reservations" %}</h1>
+
+          {% if error_reservation %}
+            <div class="alert alert-warning text-center mt-3">
+              {{ error_reservation }}
+            </div>
+          {% endif %}
+
+          <div class="d-flex justify-content-center mb-3">
+            {% if error_reservation %}
+              <button class="btn btn-secondary btn-lg" disabled>
+                <i class="fa fa-ban"></i> {% trans "Add New Reservation" %}
+              </button>
+            {% else %}
+              <a href="{% url 'reservation_create' %}" class="btn btn-primary btn-lg">
+                <i class="fa fa-plus"></i> {% trans "Add New Reservation" %}
+              </a>
+            {% endif %}
+          </div>
+
+          {% if reservations %}
+          <div class="table-responsive">
+            <table class="table table-striped table-bordered text-center align-middle">
+              <thead class="thead-dark">
+                <tr>
+                  <th>#</th>
+                  <th>Name</th>
+                  <th>Company</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                  <th>Production Area</th>
+                  <th>With Supervision</th>
+                  <th>Status</th>
+                  <th>Edit</th>
+                  <th>Cancel</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for r in reservations %}
+                <tr>
+                  <td>{{ forloop.counter }}</td>
+                  <td>{{ r.visitor_first_name }} {{ r.visitor_last_name }}</td>
+                  <td>{{ r.company }}</td>
+                  <td>{{ r.date|date:"d.m.Y" }}</td>
+                  <td>{{ r.time|default:"--" }}</td>
+                  <td>
+                    {% if r.factory %}
+                      <span class="badge badge-success">Yes</span>
+                    {% else %}
+                      <span class="badge badge-secondary">No</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if r.supervision %}
+                      <span class="badge badge-info">Yes</span>
+                    {% else %}
+                      <span class="badge badge-light">No</span>
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if r.status == "sent" %}
+  <span class="badge badge-info">Reservation Sent</span>
+{% elif r.status == "arrived" %}
+  <span class="badge badge-primary">Arrived</span>
+{% elif r.status == "completed" %}
+  <span class="badge badge-success">Visit Completed</span>
+{% elif r.status == "cancelled" %}
+  <span class="badge badge-danger">Cancelled</span>
+{% endif %}
+
+                  </td>
+                  {# w pętli for r in reservations #}
+<td>
+  {% with rc=r.reservationcode %}
+    {% if r.status in editable_statuses and rc and rc.usage_count < rc.max_uses %}
+      <a href="{% url 'reservation_edit' r.id %}" class="btn btn-warning btn-sm">
+        <i class="fa fa-edit"></i> {% trans "Edit" %}
+      </a>
+    {% else %}
+      <span class="text-muted">-</span>
+    {% endif %}
+  {% endwith %}
+</td>
+
+
+
+
+                  <td>
+  {% if r.status in cancellable_statuses %}
+    <form method="post" action="{% url 'reservation_cancel' r.id %}" class="js-cancel-form" style="display:inline;">
+      {% csrf_token %}
+      <button class="btn btn-danger btn-sm js-cancel-btn" type="submit"
+              onclick="return confirm('{% trans 'Are you sure you want to cancel this reservation?' %}');">
+        <i class="fa fa-times"></i> {% trans "Cancel" %}
+      </button>
+    </form>
+  {% else %}
+    <span class="text-muted">-</span>
+  {% endif %}
+</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+          {% else %}
+            <p class="mt-4 text-center">{% trans "No reservations found." %}</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+document.addEventListener('click', function (e) {
+  const btn = e.target.closest('.js-cancel-btn');
+  if (!btn) return;
+
+  // zatrzymaj domyślny klik, zrób confirm i ręcznie submit
+  e.preventDefault();
+
+  if (!confirm('Are you sure you want to cancel this reservation?')) {
+    return;
+  }
+
+  btn.disabled = true;
+  btn.dataset.old = btn.innerHTML;
+  btn.innerHTML = '…';
+
+  const form = btn.closest('form');
+  if (form) form.submit();
+});
+</script>
+
+{% endblock %}

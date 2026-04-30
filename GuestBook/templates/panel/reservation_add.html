@@ -1,0 +1,116 @@
+{% extends "base_panel.html" %}
+{% block content %}
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-lg-8">
+        <div class="title-single-box">
+          <br><br><br>
+          <h1 class="title-single">Add Reservation</h1>
+
+          <form method="post">
+            {% csrf_token %}
+            <div class="row">
+              <!-- Dane osobowe -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">First Name</label>
+                <input type="text" name="visitor_first_name" class="form-control" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Last Name</label>
+                <input type="text" name="visitor_last_name" class="form-control" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Phone</label>
+                <input type="text" name="phone" class="form-control">
+              </div>
+
+              <!-- Firma i host -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Company</label>
+                <select name="company" class="form-select">
+                  <option value="">---</option>
+                  {% for company in companies %}
+                    <option value="{{ company.id }}">{{ company.company_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Host</label>
+                <select name="host" class="form-select">
+                  <option value="">---</option>
+                  {% for h in hosts %}
+                    <option value="{{ h.id }}">{{ h.host_name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+
+              <!-- Data wizyty i status -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Date</label>
+                <input type="date" name="date" class="form-control" value="{{ today|date:'Y-m-d' }}" required>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                  <option value="sent">Reservation Sent</option>
+                  <option value="arrived">Arrived</option>
+                  <option value="completed">Visit Completed</option>
+                </select>
+              </div>
+
+              <!-- Audit Dates -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Audit Start Date</label>
+                <input type="date" name="audit_start_date" class="form-control">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Audit End Date</label>
+                <input type="date" name="audit_end_date" class="form-control">
+              </div>
+
+              <!-- Production Area (Factory) & Supervision -->
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="factory">
+                <label class="form-check-label">Production Area</label>
+              </div>
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" name="supervision">
+                <label class="form-check-label">With Supervision</label>
+              </div>
+
+              <!-- Conference Needed -->
+              <div class="col-md-6 mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="conference_needed" name="conference_needed">
+                <label class="form-check-label" for="conference_needed">Conference Room Needed</label>
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Conference Room</label>
+                <select name="conference_room" class="form-select">
+                  <option value="">---</option>
+                  <option value="VIP">VIP</option>
+                  <option value="Kreatywna">Kreatywna</option>
+                  <option value="Kameralna">Kameralna</option>
+                </select>
+              </div>
+
+              <!-- Visit Purpose -->
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Visit Purpose</label>
+                <input type="text" name="visit_purpose_choice" class="form-control">
+              </div>
+              <div class="col-md-6 mb-3">
+                <label class="form-label">Other Purpose</label>
+                <input type="text" name="other_purpose" class="form-control">
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn-success">Save</button>
+            <a href="{% url 'reservation_visitor' %}" class="btn btn-secondary">Cancel</a>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

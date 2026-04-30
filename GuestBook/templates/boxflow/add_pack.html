@@ -1,0 +1,63 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+{% block content %}
+<br>
+<br>
+<section class="intro-single py-4">
+  <div class="container">
+    <h1 class="title-single mb-3 text-center">AddPack</h1>
+
+    <form method="post" class="card shadow-sm mx-auto" style="max-width: 560px; width: 100%;">
+      {% csrf_token %}
+      <div class="card-body">
+        <div class="mx-auto" style="max-width: 420px;">
+          <div class="mb-3">
+            <label class="form-label">Delivery date</label>
+            {{ form.delivered_at }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Sender</label>
+            {{ form.sender }}
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Recipient</label>
+            {{ form.recipient }}
+          </div>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger mt-3">{{ form.non_field_errors }}</div>
+        {% endif %}
+      </div>
+
+      <div class="card-footer d-flex justify-content-center gap-2">
+        <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">List</a>
+        <button class="btn btn-success">Save + Print</button>
+      </div>
+    </form>
+  </div>
+</section>
+<br>
+<br>
+<script>
+  // Nadaj klasy Bootstrap polom (bez customowych filtrów)
+  document.addEventListener('DOMContentLoaded', function () {
+    const byId = id => document.getElementById(id);
+    const delivered = byId('id_delivered_at');
+    const sender    = byId('id_sender');
+    const recipient = byId('id_recipient');
+
+    const ensureBsClass = el => {
+      if (!el) return;
+      const isSelect = el.tagName === 'SELECT';
+      el.classList.add(isSelect ? 'form-select' : 'form-control');
+    };
+
+    ensureBsClass(delivered);
+    ensureBsClass(sender);
+    ensureBsClass(recipient);
+  });
+</script>
+{% endblock %}

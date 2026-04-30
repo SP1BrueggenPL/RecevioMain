@@ -1,0 +1,60 @@
+{% extends 'base_kiosk.html' %}
+{% load i18n static %}
+
+{% block content %}
+<div style="
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    margin-top: 30px;
+">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="max-height: 160px;">
+</div>
+
+<div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center; white-space: nowrap;">
+  <h1 style="font-size: 3rem; margin-bottom: 2rem; white-space: normal; word-break: break-word;">
+    {% trans "Hygiene and Safety rules for visitors for Wilga" %}
+</h1>
+
+
+
+  <form method="post" style="font-size: 2rem;">
+    {% csrf_token %}
+    <label style="display: block; font-size: 2rem; margin-bottom: 2rem; white-space: normal;">
+      {% trans "Do you suffer from any illnesses or have other symptoms such as: diarrhoea, vomit, fever, open cutaneous lesions, dark urine?" %}
+    </label>
+
+    <div style="margin-bottom: 3rem; text-align: center;">
+      <label style="margin-right: 80px; font-size: 2rem;">
+        <input type="radio" name="question_1" value="{% trans 'Yes' %}" required
+               style="transform: scale(2); margin-right: 15px;">
+        {% trans "Yes" %}
+      </label>
+      <label style="font-size: 2rem;">
+        <input type="radio" name="question_1" value="{% trans 'No' %}"
+               style="transform: scale(2); margin-right: 15px;">
+        {% trans "No" %}
+      </label>
+    </div>
+
+    <div style="margin-top: 1rem;">
+      <button type="submit"
+        style="
+          width: 320px;
+          height: 100px;
+          font-size: 2rem;
+          background-color: #cc6884;
+          color: white;
+          border: none;
+          border-radius: 12px;
+          cursor: pointer;
+          box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        ">
+        <b>{% trans "Continue" %}</b>
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}

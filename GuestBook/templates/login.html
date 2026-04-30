@@ -1,0 +1,82 @@
+{% load static %}
+{% load crispy_forms_tags %}
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GuestBook</title>
+  <meta content="width=device-width, initial-scale=1.0" name="viewport">
+  <link href="{% static 'lib/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+  <link href="{% static 'css/style.css' %}" rel="stylesheet">
+</head>
+
+<body>
+
+<section class="intro-single">
+    <div class="container">
+      <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+
+          <div class="title-single-box">
+
+            {% if messages %}
+  {% for message in messages %}
+    {% if 'login' in message.tags %}
+      <div class="alert alert-danger fade show login-alert" role="alert">
+        {{ message }}
+      </div>
+    {% endif %}
+  {% endfor %}
+{% endif %}
+
+
+
+            <form method="post" action="{% url 'login' %}">
+              {% csrf_token %}
+              {% if next %}
+                <input type="hidden" name="next" value="{{ next }}">
+              {% endif %}
+
+              <div class="form-floating mb-3">
+                <label for="floatingInput">Login</label>
+                {{ form.username }}
+              </div>
+
+              <div class="form-floating mb-3">
+                <label for="floatingPassword">Password</label>
+                {{ form.password }}
+              </div>
+
+              <button class="w-100 btn btn-lg btn-primary" type="submit">Zaloguj się</button>
+            </form>
+
+          </div>
+        </div>
+      </div>
+    </div>
+</section>
+
+<footer>
+  <div class="container text-center">
+    <img src="{% static 'logo.png' %}" alt="Logo" style="width:400px; height:auto; margin-bottom:10px;">
+    <div class="copyright-footer">
+      <p class="copyright color-text-a">&copy; Copyright <span class="color-a">GuestBook</span></p>
+    </div>
+    <div class="credits">Designed by <a href="">Sebastian Paszkowski</a></div>
+  </div>
+</footer>
+
+<script src="{% static 'lib/bootstrap/js/bootstrap.min.js' %}"></script>
+<script>
+  window.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.login-alert').forEach(function (el) {
+      setTimeout(function () {
+        // Bootstrap fade-out: usuń "show", a po animacji usuń element z DOM
+        el.classList.remove('show');
+        el.addEventListener('transitionend', function () { el.remove(); }, { once: true });
+      }, 3000);
+    });
+  });
+</script>
+
+</body>
+</html>
