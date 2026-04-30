@@ -13,9 +13,6 @@ debug.log*
 sms.log
 media/
 
-# Environment variables
-.env
-
 # IDE
 .idea/
 
