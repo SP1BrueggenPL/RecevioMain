@@ -19,9 +19,6 @@ media/
 # IDE
 .idea/
 
-# Requirements apps (local SDK)
-requirements_apps/
-
 # Logs
 *.log
 *.log.*
