@@ -1,0 +1,10 @@
+@echo off
+setlocal
+cd /d C:\Apps\AuditManager
+call .venv\Scripts\activate.bat
+
+:: serwer w PRZODZIE – NSSM nad nim panuje
+C:\Apps\AuditManager\.venv\Scripts\python.exe manage.py runserver 0.0.0.0:8000 --noreload
+
+endlocal
+exit /b %errorlevel%S

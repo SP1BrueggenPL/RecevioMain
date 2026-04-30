@@ -1,0 +1,8 @@
+Przechodzimy do folderu w CMD z aktywnym środowiskiem, folder ten musi być w głównym folderze obok foldera ze środowiskiem. Następnie komendy:
+
+pip install --user -r requirements.txt
+python setup.py install --user
+
+pip list | findstr swagger - dla sprwdzenia
+
+i uruchamiamy server
