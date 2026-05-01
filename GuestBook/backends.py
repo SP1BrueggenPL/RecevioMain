@@ -7,6 +7,9 @@ from .models import AdminProfile
 class LDAPBackend:
     def authenticate(self, request, username=None, password=None):
         ldap_server = settings.LDAP_SERVER_URI
+        if not ldap_server:
+            print("[LDAP] ❌ LDAP_SERVER_URI nie jest ustawiony — pomijam backend LDAP")
+            return None
         ldap_base_dn = settings.LDAP_USER_BASE_DN or "DC=brueggen,DC=com"
         server = Server(ldap_server, get_info=ALL)
 
