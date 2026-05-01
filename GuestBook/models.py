@@ -261,6 +261,8 @@ class Package(models.Model):
     )
     collected_by_name = models.CharField(max_length=150, blank=True)
 
+    phone_number = models.CharField("Phone number", max_length=30, blank=True, default="")
+
     issued_at = models.DateTimeField(null=True, blank=True)
     issued_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,
                                   on_delete=models.SET_NULL, related_name="+")
