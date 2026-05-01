@@ -2882,7 +2882,7 @@ def boxflow_scan_label(request):
                     api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
                 )
                 msg = az_client.chat.completions.create(
-                    model="gpt-4o-2",
+                    model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
                     max_tokens=512,
                     messages=[
                         {
