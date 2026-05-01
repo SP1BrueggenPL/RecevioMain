@@ -1,0 +1,2 @@
+2025-07-23 14:37:02,169 - WARNING - [REDIRECT] Brama przekierowuje na: https://10.30.70.20/api/v1/sms/send
+2025-07-23 14:37:02,684 - ERROR - [HTTP ERROR] 404 - {"code":404,"message":"404 Not Found","reasons":["The requested route does not exist"]}
