@@ -222,11 +222,19 @@ from django import forms
 from .models import Package, Sender, Recipient
 from django.utils import timezone
 
+class LabelScanForm(forms.Form):
+    label_image = forms.ImageField(
+        label="Zdjęcie etykiety",
+        widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"})
+    )
+
+
 class PackageForm(forms.ModelForm):
     # 1) Nadawca: wybór z listy **lub** wpisanie nowego
     sender = forms.ModelChoiceField(
         queryset=Sender.objects.all(),
         required=False,
+        empty_label="----------",
         widget=forms.Select(attrs={"class": "form-select"})
     )
     new_sender = forms.CharField(
@@ -238,6 +246,7 @@ class PackageForm(forms.ModelForm):
     recipient = forms.ModelChoiceField(
         queryset=Recipient.objects.all(),
         required=True,
+        empty_label="----------",
         widget=forms.Select(attrs={"class": "form-select"})
     )
 
@@ -246,9 +255,14 @@ class PackageForm(forms.ModelForm):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"})
     )
 
+    phone_number = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Numer telefonu nadawcy"})
+    )
+
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "new_sender", "recipient"]
+        fields = ["delivered_at", "sender", "new_sender", "phone_number", "recipient"]
 
     def clean(self):
         data = super().clean()
