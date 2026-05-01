@@ -45,7 +45,7 @@ from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django.db.models import Q
 from .models import Package
-from .forms import PackageForm, ScanForm
+from .forms import PackageForm, ScanForm, LabelScanForm
 import signal
 from django.utils.translation import gettext as _
 import threading
@@ -654,7 +654,7 @@ def enter_badge_view(request):
                 'audit_end_date': "",
             }
 
-            # Kopia „informacyjna” (opcjonalne)
+            # Kopia „informacyjna" (opcjonalne)
             request.session['trusted_visitor'] = {
                 'first_name': trusted.first_name,
                 'last_name': trusted.last_name,
@@ -1379,7 +1379,7 @@ def complete_code_view(request, reservation_id=None):
                .first())
 
     if not visitor:
-        # Jeżeli tu trafiasz, to w ścieżce rejestracji „na kod” nie zostało
+        # Jeżeli tu trafiasz, to w ścieżce rejestracji „na kod" nie zostało
         # przypisane visitor.reservation = reservation. Uzupełnij to w miejscu
         # tworzenia/aktualizacji Visitora (np. w widoku podpisu).
         return render(request, 'kiosk/error.html', {
@@ -2017,7 +2017,7 @@ def reservation_create_view(request):
 
             reservation.user = request.user
             reservation.status = 'sent'
-            reservation.sms_status = 'pending'   # ⬅️ od razu pokaż w UI „Pending”
+            reservation.sms_status = 'pending'   # ⬅️ od razu pokaż w UI „Pending"
             reservation.save()
 
             code = ReservationCode.objects.create(reservation=reservation)
@@ -2156,7 +2156,7 @@ def reservation_cancel_view(request, pk):
     # ustaw anulowanie + znacznik czasu
     reservation.status = 'cancelled'
     reservation.cancelled_at = timezone.now()  # <<<<<<
-    reservation.sms_status = sms_status  # od razu odśwież „Send”
+    reservation.sms_status = sms_status  # od razu odśwież „Send"
     reservation.save(update_fields=['status', 'cancelled_at', 'sms_status'])
 
     # komunikaty UI
@@ -2860,11 +2860,87 @@ boxflow_required = user_passes_test(_can_boxflow)
 helpdesk_required = user_passes_test(_can_helpdesk)
 
 
+# --- AI Label Scan ---
+
+@login_required
+@boxflow_required
+def boxflow_scan_label(request):
+    """Step 1: Upload package label image; AI extracts sender/recipient/phone."""
+    if request.method == "POST":
+        form = LabelScanForm(request.POST, request.FILES)
+        if form.is_valid():
+            image_file = request.FILES["label_image"]
+            image_data = image_file.read()
+            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
+            media_type = image_file.content_type or "image/jpeg"
+
+            try:
+                from openai import AzureOpenAI as _AzureOpenAI
+                az_client = _AzureOpenAI(
+                    api_version="2024-12-01-preview",
+                    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/"),
+                    api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+                )
+                msg = az_client.chat.completions.create(
+                    model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
+                    max_tokens=512,
+                    messages=[
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{media_type};base64,{image_b64}",
+                                    },
+                                },
+                                {
+                                    "type": "text",
+                                    "text": (
+                                        "Odczytaj dane z etykiety paczki na zdjęciu. "
+                                        "Zwróć dane w formacie JSON z dokładnie tymi polami: "
+                                        "\"sender\" (imię i nazwisko lub nazwa nadawcy), "
+                                        "\"recipient\" (imię i nazwisko lub nazwa odbiorcy), "
+                                        "\"phone\" (numer telefonu). "
+                                        "Jeśli jakiegoś pola nie możesz odczytać, wstaw pusty string. "
+                                        "Odpowiedz TYLKO czystym JSON-em bez markdown, bez żadnych dodatkowych słów."
+                                    ),
+                                },
+                            ],
+                        }
+                    ],
+                )
+                raw = msg.choices[0].message.content.strip()
+                # strip markdown code fences if present
+                if raw.startswith("```"):
+                    raw = raw.split("```")[1]
+                    if raw.startswith("json"):
+                        raw = raw[4:]
+                extracted = json.loads(raw)
+            except Exception as e:
+                messages.warning(request, f"AI nie mogło odczytać etykiety: {e}")
+                extracted = {}
+
+            request.session["pack_prefill"] = {
+                "sender": (extracted.get("sender") or "").strip(),
+                "recipient": (extracted.get("recipient") or "").strip(),
+                "phone": (extracted.get("phone") or "").strip(),
+            }
+            return redirect("boxflow_add_confirm")
+    else:
+        form = LabelScanForm()
+
+    return render(request, "boxflow/scan_label.html", {"form": form})
+
+
 # views.py
 @login_required
 @boxflow_required
 @transaction.atomic
 def boxflow_add_pack(request):
+    """Step 2: Review/edit pre-filled form and save package."""
+    prefill = request.session.pop("pack_prefill", None)
+
     if request.method == "POST":
         form = PackageForm(request.POST)
         if form.is_valid():
@@ -2882,7 +2958,7 @@ def boxflow_add_pack(request):
             pkg.save()
             form.save_m2m()
 
-            # 3) DRUK z pliku (timeout 5s) — „jak w complete_code_view”
+            # 3) DRUK z pliku (timeout 5s) — „jak w complete_code_view"
             try:
                 # Ten sam folder co kioskowy szablon:
                 # GuestBook/Print_templates/box_label.zpl
@@ -2930,7 +3006,6 @@ def boxflow_add_pack(request):
                 except Exception:
                     pass
 
-            # 4) E-mail do odbiorcy (opcjonalnie)
             # 4) E-mail do odbiorcy (opcjonalnie) — po commicie + timeout 5s
             if getattr(pkg.recipient, "email", None):
                 subject = f"Paczka w paczkomacie: {pkg.code}"
@@ -2951,14 +3026,48 @@ def boxflow_add_pack(request):
 
                 transaction.on_commit(_send_after_commit)
 
-            # 5) Tylko komunikat i powrót do formularza (bez widoku detalu)
+            # 5) Tylko komunikat i powrót do skanowania
             messages.success(request, f"Package {pkg.code} has been added.")
-            return redirect("boxflow_add")  # upewnij się, że nazwa URL jest poprawna
+            return redirect("boxflow_add")
 
     else:
-        form = PackageForm()
+        # Pre-fill form with AI-extracted data
+        initial = {}
+        ai_sender_name = ""
+        ai_recipient_name = ""
+        if prefill:
+            initial["phone_number"] = prefill.get("phone", "")
+            initial["delivered_at"] = timezone.now()
 
-    return render(request, "boxflow/add_pack.html", {"form": form})
+            # Try to match sender name to existing Sender
+            sender_name = prefill.get("sender", "")
+            if sender_name:
+                from .models import Sender as _Sender
+                matched = _Sender.objects.filter(name__iexact=sender_name).first()
+                if matched:
+                    initial["sender"] = matched
+                else:
+                    initial["new_sender"] = sender_name
+                    ai_sender_name = sender_name
+
+            # Try to match recipient name to existing Recipient
+            recipient_name = prefill.get("recipient", "")
+            if recipient_name:
+                from .models import Recipient as _Recipient
+                matched_r = _Recipient.objects.filter(name__iexact=recipient_name).first()
+                if matched_r:
+                    initial["recipient"] = matched_r
+                else:
+                    ai_recipient_name = recipient_name
+
+        form = PackageForm(initial=initial)
+
+    return render(request, "boxflow/add_pack.html", {
+        "form": form,
+        "ai_recipient_name": ai_recipient_name if request.method == "GET" else "",
+        "ai_sender_name": ai_sender_name if request.method == "GET" else "",
+        "from_scan": prefill is not None,
+    })
 
 
 
