@@ -1,4 +1,6 @@
 openai>=1.30.0
+whitenoise==6.9.0
+gunicorn==23.0.0
 six==1.17.0
 sqlparse==0.5.3
 asgiref==3.11.1
