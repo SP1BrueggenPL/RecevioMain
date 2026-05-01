@@ -1,0 +1,124 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+{% block content %}
+<br>
+<br>
+<section class="intro-single py-4">
+  <div class="container">
+    <h1 class="title-single mb-3 text-center">AddPack</h1>
+
+    {% if messages %}
+      {% for msg in messages %}
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mx-auto mb-3" style="max-width: 560px;" role="alert">
+          {{ msg }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endif %}
+
+    <div class="card shadow-sm mx-auto" style="max-width: 560px; width: 100%;">
+      <div class="card-body">
+        <div class="mx-auto" style="max-width: 420px;">
+          <p class="text-muted text-center mb-4">
+            Zrób zdjęcie etykiety paczki. AI automatycznie odczyta dane nadawcy, odbiorcy i numer telefonu.
+          </p>
+
+          <form method="post" enctype="multipart/form-data" id="scanForm">
+            {% csrf_token %}
+
+            <div class="mb-3">
+              <label class="form-label fw-semibold">Zdjęcie etykiety</label>
+              <div id="dropZone" class="border border-2 border-dashed rounded p-4 text-center" style="cursor: pointer; border-style: dashed !important; transition: background .2s;">
+                <div id="dropPrompt">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" fill="currentColor" class="bi bi-camera text-secondary mb-2" viewBox="0 0 16 16">
+                    <path d="M15 12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h1.172a3 3 0 0 0 2.12-.879l.83-.828A1 1 0 0 1 6.83 3h2.34a1 1 0 0 1 .707.293l.828.828A3 3 0 0 0 12.828 5H14a1 1 0 0 1 1 1zM2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4z"/>
+                    <path d="M8 11a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5m0 1a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7M3 6.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0"/>
+                  </svg>
+                  <p class="text-secondary mb-1">Kliknij lub przeciągnij zdjęcie tutaj</p>
+                  <p class="text-secondary small">JPG, PNG, WEBP</p>
+                </div>
+                <img id="previewImg" src="" alt="Podgląd" class="img-fluid rounded d-none" style="max-height: 220px; object-fit: contain;">
+                <input type="file" name="label_image" id="id_label_image" accept="image/*" capture="environment" class="d-none" required>
+              </div>
+              {% if form.label_image.errors %}
+                <div class="text-danger small mt-1">{{ form.label_image.errors }}</div>
+              {% endif %}
+            </div>
+
+            <div id="analyzeSection" class="d-none">
+              <div id="loadingSpinner" class="d-none text-center my-3">
+                <div class="spinner-border text-success" role="status"></div>
+                <p class="text-muted mt-2 mb-0">AI analizuje etykietę…</p>
+              </div>
+              <button type="submit" class="btn btn-success w-100" id="analyzeBtn">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-stars me-1" viewBox="0 0 16 16">
+                  <path d="M7.657 6.247c.11-.33.576-.33.686 0l.645 1.937a2.89 2.89 0 0 0 1.829 1.828l1.936.645c.33.11.33.576 0 .686l-1.937.645a2.89 2.89 0 0 0-1.828 1.829l-.645 1.936a.361.361 0 0 1-.686 0l-.645-1.937a2.89 2.89 0 0 0-1.828-1.828l-1.937-.645a.361.361 0 0 1 0-.686l1.937-.645a2.89 2.89 0 0 0 1.828-1.828zM3.794 1.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387A1.73 1.73 0 0 0 4.593 5.69l-.387 1.162a.217.217 0 0 1-.412 0L3.407 5.69A1.73 1.73 0 0 0 2.31 4.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387A1.73 1.73 0 0 0 3.407 2.31zM10.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.16 1.16 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.16 1.16 0 0 0-.732-.732L9.1 2.137a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732z"/>
+                </svg>
+                Analizuj etykietę
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="card-footer d-flex justify-content-center gap-2">
+        <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">List</a>
+      </div>
+    </div>
+  </div>
+</section>
+<br>
+<br>
+
+<script>
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('id_label_image');
+  const previewImg = document.getElementById('previewImg');
+  const dropPrompt = document.getElementById('dropPrompt');
+  const analyzeSection = document.getElementById('analyzeSection');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const loadingSpinner = document.getElementById('loadingSpinner');
+
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover', e => {
+    e.preventDefault();
+    dropZone.style.background = '#f0fff4';
+  });
+  dropZone.addEventListener('dragleave', () => {
+    dropZone.style.background = '';
+  });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.style.background = '';
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setFile(file);
+    }
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setFile(fileInput.files[0]);
+  });
+
+  function setFile(file) {
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.src = e.target.result;
+      previewImg.classList.remove('d-none');
+      dropPrompt.classList.add('d-none');
+      analyzeSection.classList.remove('d-none');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  document.getElementById('scanForm').addEventListener('submit', () => {
+    analyzeBtn.classList.add('d-none');
+    loadingSpinner.classList.remove('d-none');
+  });
+</script>
+{% endblock %}

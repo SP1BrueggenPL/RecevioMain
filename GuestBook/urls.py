@@ -90,7 +90,8 @@ urlpatterns = [
     path('helpdesk/users/', views.helpdesk_user_list, name='helpdesk_users'),
     path('helpdesk/users/<int:uid>/', views.helpdesk_user_edit, name='helpdesk_user_edit'),
 
-    path("boxflow/add/", views.boxflow_add_pack, name="boxflow_add"),
+    path("boxflow/add/", views.boxflow_scan_label, name="boxflow_add"),
+    path("boxflow/add/confirm/", views.boxflow_add_pack, name="boxflow_add_confirm"),
     path("boxflow/list/", views.boxflow_pack_list, name="boxflow_list"),
     path('boxflow/<int:pk>/delete/', views.boxflow_delete_pack, name='boxflow_delete'),
     path("boxflow/inbox/", views.boxflow_inbox_status, name="boxflow_inbox"),
