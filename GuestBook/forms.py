@@ -1,4 +1,4 @@
-from django import forms
+﻿from django import forms
 from .forms import *
 from .models import *
 from django.contrib.auth.models import User
@@ -92,7 +92,7 @@ class VisitorForm(forms.ModelForm):
         if not factory and not no_company and not other_company:
             raise forms.ValidationError(_("Please select a company, enter one manually, or check 'no company'."))
 
-        # jeśli wybrano firmę z listy, a jednocześnie wpisano „inną” — utnij „inną”
+        # jeśli wybrano firmę z listy, a jednocześnie wpisano „inną" — utnij „inną"
         if factory and other_company:
             cleaned_data['other_company'] = ""
 
