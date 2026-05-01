@@ -2865,7 +2865,7 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 @login_required
 @boxflow_required
 def boxflow_scan_label(request):
-    “””Step 1: Upload package label image; Claude AI extracts sender/recipient/phone.”””
+    “””Step 1: Upload package label image; AI extracts sender/recipient/phone.”””
     if request.method == “POST”:
         form = LabelScanForm(request.POST, request.FILES)
         if form.is_valid():
