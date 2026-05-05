@@ -255,14 +255,9 @@ class PackageForm(forms.ModelForm):
         widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"})
     )
 
-    phone_number = forms.CharField(
-        required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Sender phone number"})
-    )
-
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "new_sender", "phone_number", "recipient"]
+        fields = ["delivered_at", "sender", "new_sender", "recipient"]
 
     def clean(self):
         data = super().clean()
