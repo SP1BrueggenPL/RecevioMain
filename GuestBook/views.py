@@ -2862,52 +2862,49 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 
 # --- AI Label Scan ---
 
-def _call_ai_label(images):
-    """Send one or more label images to Azure OpenAI and return extracted dict."""
+def _call_ai_single(img_data, media_type):
+    """Send a single label image to Azure OpenAI; return extracted dict."""
     from openai import AzureOpenAI as _AzureOpenAI
     az_client = _AzureOpenAI(
         api_version="2024-12-01-preview",
         azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/"),
         api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
     )
-    content = []
-    for img_data, media_type in images:
-        img_b64 = base64.standard_b64encode(img_data).decode("utf-8")
-        content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:{media_type};base64,{img_b64}"},
-        })
-    content.append({
-        "type": "text",
-        "text": (
-            "Read the package label(s) in the image(s). "
-            "Return JSON with exactly these fields: "
-            "\"sender\" (sender name or company), "
-            "\"recipient\" (recipient name — the individual person, not the company), "
-            "\"phone\" (phone number). "
-            "If a field cannot be read, use an empty string. "
-            "Reply with ONLY raw JSON, no markdown, no extra words."
-        ),
-    })
+    img_b64 = base64.standard_b64encode(img_data).decode("utf-8")
     msg = az_client.chat.completions.create(
         model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
-        max_tokens=512,
-        messages=[{"role": "user", "content": content}],
+        max_tokens=256,
+        messages=[{
+            "role": "user",
+            "content": [
+                {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{img_b64}"}},
+                {"type": "text", "text": (
+                    "Read the package label in the photo. "
+                    "Return JSON with exactly these fields: "
+                    "\"sender\" (sender name or company), "
+                    "\"recipient\" (recipient — the individual person's name, not the company). "
+                    "If a field cannot be read, use an empty string. "
+                    "Reply with ONLY raw JSON, no markdown, no extra words."
+                )},
+            ],
+        }],
     )
     raw = msg.choices[0].message.content.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
             raw = raw[4:]
-    return json.loads(raw)
+    result = json.loads(raw)
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    return result
 
 
 @login_required
 @boxflow_required
 def boxflow_scan_label(request):
-    """Step 1: Upload one or more package label images; AI extracts sender/recipient/phone."""
+    """Step 1: Upload label image(s). Each image = one package; queued through confirm one by one."""
     if request.method == "POST":
-        # Collect images: multi-upload takes priority, falls back to single
         files = request.FILES.getlist("label_images") or (
             [request.FILES["label_image"]] if "label_image" in request.FILES else []
         )
@@ -2915,18 +2912,29 @@ def boxflow_scan_label(request):
             messages.error(request, "Please select at least one image.")
             return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
 
-        try:
-            images = [(f.read(), f.content_type or "image/jpeg") for f in files]
-            extracted = _call_ai_label(images)
-        except Exception as e:
-            messages.warning(request, f"AI could not read the label: {e}")
-            extracted = {}
+        queue = []
+        errors = []
+        for f in files:
+            try:
+                result = _call_ai_single(f.read(), f.content_type or "image/jpeg")
+                queue.append({
+                    "sender": (result.get("sender") or "").strip(),
+                    "recipient": (result.get("recipient") or "").strip(),
+                })
+            except Exception as e:
+                errors.append(str(e))
 
-        request.session["pack_prefill"] = {
-            "sender": (extracted.get("sender") or "").strip(),
-            "recipient": (extracted.get("recipient") or "").strip(),
-            "phone": (extracted.get("phone") or "").strip(),
-        }
+        if errors:
+            messages.warning(request, f"AI could not read {len(errors)} label(s): {errors[0]}")
+
+        if not queue:
+            return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
+
+        # Pop first into pack_prefill; store the rest as a queue for subsequent confirms
+        request.session["pack_prefill"] = queue[0]
+        if len(queue) > 1:
+            request.session["pack_prefill_queue"] = queue[1:]
+            messages.info(request, f"{len(queue)} packages scanned. Processing one by one.")
         return redirect("boxflow_add_confirm")
 
     return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
@@ -3025,8 +3033,15 @@ def boxflow_add_pack(request):
 
                 transaction.on_commit(_send_after_commit)
 
-            # 5) Tylko komunikat i powrót do skanowania
+            # 5) If there are more packages in the batch queue, advance to the next one
+            remaining = request.session.pop("pack_prefill_queue", [])
             messages.success(request, f"Package {pkg.code} has been added.")
+            if remaining:
+                request.session["pack_prefill"] = remaining[0]
+                if len(remaining) > 1:
+                    request.session["pack_prefill_queue"] = remaining[1:]
+                messages.info(request, f"{len(remaining)} package(s) remaining in batch.")
+                return redirect("boxflow_add_confirm")
             return redirect("boxflow_add")
 
     else:
@@ -3035,7 +3050,6 @@ def boxflow_add_pack(request):
         ai_sender_name = ""
         ai_recipient_name = ""
         if prefill:
-            initial["phone_number"] = prefill.get("phone", "")
             initial["delivered_at"] = timezone.now()
 
             # Try to match sender name to existing Sender (exact then fuzzy)

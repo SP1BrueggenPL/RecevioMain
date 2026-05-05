@@ -55,11 +55,6 @@
           </div>
 
           <div class="mb-3">
-            <label class="form-label">Phone number</label>
-            {{ form.phone_number }}
-          </div>
-
-          <div class="mb-3">
             <label class="form-label">Recipient</label>
             {{ form.recipient }}
             {% if ai_recipient_name %}
@@ -97,14 +92,13 @@
     const delivered = byId('id_delivered_at');
     const sender    = byId('id_sender');
     const newSender = byId('id_new_sender');
-    const phone     = byId('id_phone_number');
     const recipient = byId('id_recipient');
 
     const ensureBsClass = el => {
       if (!el) return;
       el.classList.add(el.tagName === 'SELECT' ? 'form-select' : 'form-control');
     };
-    [delivered, sender, newSender, phone, recipient].forEach(ensureBsClass);
+    [delivered, sender, newSender, recipient].forEach(ensureBsClass);
 
     if (sender && newSender) {
       sender.addEventListener('change', () => { if (sender.value) newSender.value = ''; });
