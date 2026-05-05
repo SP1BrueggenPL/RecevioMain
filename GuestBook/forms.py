@@ -222,6 +222,7 @@ from django import forms
 from .models import Package, Sender, Recipient
 from django.utils import timezone
 
+
 class LabelScanForm(forms.Form):
     label_image = forms.ImageField(
         label="Label photo",
