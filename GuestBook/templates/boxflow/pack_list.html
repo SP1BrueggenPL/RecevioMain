@@ -51,7 +51,7 @@
                 {% csrf_token %}
                 <button type="submit"
                         class="btn btn-sm btn-outline-danger w-100"
-                        onclick="return confirm('Na pewno usunąć paczkę {{ p.code }}?')">
+                        onclick="return confirm('Are you sure you want to delete package {{ p.code }}?')">
                   Delete
                 </button>
               </form>

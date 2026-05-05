@@ -224,7 +224,7 @@ from django.utils import timezone
 
 class LabelScanForm(forms.Form):
     label_image = forms.ImageField(
-        label="Zdjęcie etykiety",
+        label="Label photo",
         widget=forms.ClearableFileInput(attrs={"class": "form-control", "accept": "image/*"})
     )
 
@@ -239,7 +239,7 @@ class PackageForm(forms.ModelForm):
     )
     new_sender = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Nowy nadawca (jeśli brak na liście)"})
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "New sender (if not in the list)"})
     )
 
     # 2) Odbiorca: tylko z listy (zarządzany przez helpdesk)
@@ -257,7 +257,7 @@ class PackageForm(forms.ModelForm):
 
     phone_number = forms.CharField(
         required=False,
-        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Numer telefonu nadawcy"})
+        widget=forms.TextInput(attrs={"class": "form-control", "placeholder": "Sender phone number"})
     )
 
     class Meta:
@@ -270,9 +270,9 @@ class PackageForm(forms.ModelForm):
         new_sender = (data.get("new_sender") or "").strip()
 
         if not sender and not new_sender:
-            raise forms.ValidationError("Wybierz nadawcę z listy albo wpisz nowego.")
+            raise forms.ValidationError("Select a sender from the list or enter a new one.")
         if sender and new_sender:
-            raise forms.ValidationError("Podaj tylko jedną opcję nadawcy.")
+            raise forms.ValidationError("Provide only one sender option.")
         return data
 
     def save(self, commit=True, user=None):

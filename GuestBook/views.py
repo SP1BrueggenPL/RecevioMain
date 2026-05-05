@@ -2862,75 +2862,74 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 
 # --- AI Label Scan ---
 
+def _call_ai_label(images):
+    """Send one or more label images to Azure OpenAI and return extracted dict."""
+    from openai import AzureOpenAI as _AzureOpenAI
+    az_client = _AzureOpenAI(
+        api_version="2024-12-01-preview",
+        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/"),
+        api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+    )
+    content = []
+    for img_data, media_type in images:
+        img_b64 = base64.standard_b64encode(img_data).decode("utf-8")
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{media_type};base64,{img_b64}"},
+        })
+    content.append({
+        "type": "text",
+        "text": (
+            "Read the package label(s) in the image(s). "
+            "Return JSON with exactly these fields: "
+            "\"sender\" (sender name or company), "
+            "\"recipient\" (recipient name — the individual person, not the company), "
+            "\"phone\" (phone number). "
+            "If a field cannot be read, use an empty string. "
+            "Reply with ONLY raw JSON, no markdown, no extra words."
+        ),
+    })
+    msg = az_client.chat.completions.create(
+        model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
+        max_tokens=512,
+        messages=[{"role": "user", "content": content}],
+    )
+    raw = msg.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    return json.loads(raw)
+
+
 @login_required
 @boxflow_required
 def boxflow_scan_label(request):
-    """Step 1: Upload package label image; AI extracts sender/recipient/phone."""
+    """Step 1: Upload one or more package label images; AI extracts sender/recipient/phone."""
     if request.method == "POST":
-        form = LabelScanForm(request.POST, request.FILES)
-        if form.is_valid():
-            image_file = request.FILES["label_image"]
-            image_data = image_file.read()
-            image_b64 = base64.standard_b64encode(image_data).decode("utf-8")
-            media_type = image_file.content_type or "image/jpeg"
+        # Collect images: multi-upload takes priority, falls back to single
+        files = request.FILES.getlist("label_images") or (
+            [request.FILES["label_image"]] if "label_image" in request.FILES else []
+        )
+        if not files:
+            messages.error(request, "Please select at least one image.")
+            return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
 
-            try:
-                from openai import AzureOpenAI as _AzureOpenAI
-                az_client = _AzureOpenAI(
-                    api_version="2024-12-01-preview",
-                    azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/"),
-                    api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
-                )
-                msg = az_client.chat.completions.create(
-                    model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
-                    max_tokens=512,
-                    messages=[
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "image_url",
-                                    "image_url": {
-                                        "url": f"data:{media_type};base64,{image_b64}",
-                                    },
-                                },
-                                {
-                                    "type": "text",
-                                    "text": (
-                                        "Odczytaj dane z etykiety paczki na zdjęciu. "
-                                        "Zwróć dane w formacie JSON z dokładnie tymi polami: "
-                                        "\"sender\" (imię i nazwisko lub nazwa nadawcy), "
-                                        "\"recipient\" (imię i nazwisko lub nazwa odbiorcy), "
-                                        "\"phone\" (numer telefonu). "
-                                        "Jeśli jakiegoś pola nie możesz odczytać, wstaw pusty string. "
-                                        "Odpowiedz TYLKO czystym JSON-em bez markdown, bez żadnych dodatkowych słów."
-                                    ),
-                                },
-                            ],
-                        }
-                    ],
-                )
-                raw = msg.choices[0].message.content.strip()
-                # strip markdown code fences if present
-                if raw.startswith("```"):
-                    raw = raw.split("```")[1]
-                    if raw.startswith("json"):
-                        raw = raw[4:]
-                extracted = json.loads(raw)
-            except Exception as e:
-                messages.warning(request, f"AI nie mogło odczytać etykiety: {e}")
-                extracted = {}
+        try:
+            images = [(f.read(), f.content_type or "image/jpeg") for f in files]
+            extracted = _call_ai_label(images)
+        except Exception as e:
+            messages.warning(request, f"AI could not read the label: {e}")
+            extracted = {}
 
-            request.session["pack_prefill"] = {
-                "sender": (extracted.get("sender") or "").strip(),
-                "recipient": (extracted.get("recipient") or "").strip(),
-                "phone": (extracted.get("phone") or "").strip(),
-            }
-            return redirect("boxflow_add_confirm")
-    else:
-        form = LabelScanForm()
+        request.session["pack_prefill"] = {
+            "sender": (extracted.get("sender") or "").strip(),
+            "recipient": (extracted.get("recipient") or "").strip(),
+            "phone": (extracted.get("phone") or "").strip(),
+        }
+        return redirect("boxflow_add_confirm")
 
-    return render(request, "boxflow/scan_label.html", {"form": form})
+    return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
 
 
 # views.py
@@ -3039,22 +3038,35 @@ def boxflow_add_pack(request):
             initial["phone_number"] = prefill.get("phone", "")
             initial["delivered_at"] = timezone.now()
 
-            # Try to match sender name to existing Sender
+            # Try to match sender name to existing Sender (exact then fuzzy)
             sender_name = prefill.get("sender", "")
             if sender_name:
                 from .models import Sender as _Sender
+                import difflib as _difflib
                 matched = _Sender.objects.filter(name__iexact=sender_name).first()
+                if not matched:
+                    all_senders = list(_Sender.objects.values_list("name", flat=True))
+                    close = _difflib.get_close_matches(sender_name, all_senders, n=1, cutoff=0.6)
+                    if close:
+                        matched = _Sender.objects.get(name=close[0])
                 if matched:
                     initial["sender"] = matched
                 else:
+                    # Pre-fill new_sender; form.save() will auto-create the Sender on submit
                     initial["new_sender"] = sender_name
                     ai_sender_name = sender_name
 
-            # Try to match recipient name to existing Recipient
+            # Try to match recipient name to existing Recipient (exact then fuzzy)
             recipient_name = prefill.get("recipient", "")
             if recipient_name:
                 from .models import Recipient as _Recipient
+                import difflib as _difflib
                 matched_r = _Recipient.objects.filter(name__iexact=recipient_name).first()
+                if not matched_r:
+                    all_recipients = list(_Recipient.objects.values_list("name", flat=True))
+                    close_r = _difflib.get_close_matches(recipient_name, all_recipients, n=1, cutoff=0.55)
+                    if close_r:
+                        matched_r = _Recipient.objects.get(name=close_r[0])
                 if matched_r:
                     initial["recipient"] = matched_r
                 else:
