@@ -252,7 +252,11 @@ class PackageForm(forms.ModelForm):
 
     delivered_at = forms.DateTimeField(
         initial=timezone.now,
-        widget=forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"})
+        input_formats=["%Y-%m-%dT%H:%M"],
+        widget=forms.DateTimeInput(
+            format="%Y-%m-%dT%H:%M",
+            attrs={"type": "datetime-local", "class": "form-control"},
+        ),
     )
 
     class Meta:
@@ -344,7 +348,7 @@ class PackageEditForm(forms.ModelForm):
         model = Package
         fields = ["delivered_at", "sender", "recipient"]
         widgets = {
-            "delivered_at": forms.DateTimeInput(attrs={"type": "datetime-local", "class": "form-control"}),
+            "delivered_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local", "class": "form-control"}),
             "sender": forms.Select(attrs={"class": "form-select"}),
             "recipient": forms.Select(attrs={"class": "form-select"}),
         }
