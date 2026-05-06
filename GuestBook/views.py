@@ -3492,7 +3492,7 @@ def kiosk_settings_save(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_staff)
+@user_passes_test(lambda u: u.is_staff or u.groups.filter(name="Recevio_Helpdesk").exists())
 def test_email_view(request):
     from django.core.mail import send_mail
     from django.conf import settings as django_settings
