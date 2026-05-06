@@ -58,6 +58,28 @@
 
           <hr>
 
+          {% if user.is_staff %}
+          <div class="mt-3">
+            <a href="{% url 'test_email' %}" class="btn btn-outline-info">
+              <i class="fa fa-envelope"></i> Test wysyłania e-mail
+            </a>
+          </div>
+          {% endif %}
+
+          <hr>
+          {# ✅ TYLKO gdy brak dostępu do rezerwacji #}
+          {% if not has_res_access %}
+            <div class="mt-3">
+              <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="request_res_access" value="1">
+                <button type="submit" class="btn btn-warning">
+                  <i class="fa fa-envelope"></i> I need access to Reservation
+                </button>
+              </form>
+            </div>
+          {% endif %}
+
         </div>
       </div>
     </div>
