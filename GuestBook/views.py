@@ -170,7 +170,10 @@ def send_zpl_to_printer(zpl_data: str, printer_ip='10.30.40.150', port=9100):
     except Exception as e:
         print(f"[ZEBRA PRINT ERROR] {e}")
 
-close_expired_visitors_task(repeat=3600)
+try:
+    close_expired_visitors_task(repeat=3600)
+except Exception:
+    pass  # DB not yet migrated (e.g. first deploy); background_task table created on migrate
 
 def is_reception(user):
     return user.groups.filter(name="Reception").exists()
