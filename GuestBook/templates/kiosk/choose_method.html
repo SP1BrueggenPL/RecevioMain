@@ -16,14 +16,6 @@
       <p><b>{% trans "Identification form" %}</b></p>
     </div>
 
-    <!-- Rejestracja kodem SMS -->
-    <div class="method">
-      <a href="{% url 'enter_code' %}" class="square-btn">
-        <img src="{% static 'images/sms_code.png' %}" alt="SMS Code" style="max-width: 80%; max-height: 80%;">
-      </a>
-      <p><b>{% trans "SMS code" %}</b></p>
-    </div>
-
     <!-- Rejestracja pestką (chipem) -->
     <div class="method">
       <a href="{% url 'enter_badge' %}" class="square-btn">
