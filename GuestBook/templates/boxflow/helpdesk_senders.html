@@ -4,6 +4,14 @@
 <div class="container">
   <h1 class="title-single mb-3">Senders</h1>
 
+  {% if user.is_staff %}
+  <div class="mb-3">
+    <a href="{% url 'test_email' %}" class="btn btn-outline-info btn-sm">
+      <i class="fa fa-envelope"></i> Test wysyłania e-mail
+    </a>
+  </div>
+  {% endif %}
+
   <div class="row g-3">
     <!-- Formularz dodawania -->
     <div class="col-lg-5">

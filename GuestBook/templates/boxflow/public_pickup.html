@@ -1,0 +1,150 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Odbiór paczki</title>
+  <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
+  <style>
+    body { background: #f4f6f9; font-family: 'Segoe UI', sans-serif; }
+    .pickup-card {
+      max-width: 700px; margin: 60px auto; background: #fff;
+      border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.10); padding: 48px 40px;
+    }
+    .pickup-logo { text-align: center; margin-bottom: 24px; }
+    .pickup-logo h1 { font-size: 2rem; font-weight: 700; color: #2c3e50; }
+    .pickup-logo p { color: #7f8c8d; font-size: 1.1rem; }
+    .scan-input {
+      font-size: 1.6rem; padding: 16px 20px; border-radius: 10px;
+      border: 2px solid #3498db; text-align: center; letter-spacing: 3px;
+    }
+    .scan-input:focus { border-color: #2980b9; outline: none; box-shadow: 0 0 0 3px rgba(52,152,219,0.2); }
+    .btn-pickup {
+      font-size: 1.4rem; padding: 16px 32px; border-radius: 10px; width: 100%; margin-top: 12px;
+    }
+    .btn-reset { font-size: 1rem; margin-top: 16px; }
+    .pkg-info { background: #eaf4fb; border-radius: 10px; padding: 20px 24px; margin: 20px 0; }
+    .pkg-info .label { color: #7f8c8d; font-size: 0.95rem; }
+    .pkg-info .value { font-size: 1.2rem; font-weight: 600; color: #2c3e50; }
+    .done-icon { font-size: 5rem; text-align: center; }
+    .inbox-table th, .inbox-table td { vertical-align: middle; }
+    .alert-error { background: #fdecea; border: 1px solid #e74c3c; color: #c0392b; border-radius: 8px; padding: 14px 20px; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+<div class="pickup-card">
+
+  <div class="pickup-logo">
+    <h1>📦 Odbiór paczki</h1>
+    <p>Zeskanuj kod paczki skanerem lub wpisz go ręcznie</p>
+  </div>
+
+  {% if error %}
+  <div class="alert-error">{{ error }}</div>
+  {% endif %}
+
+  {# ===== KROK 1: skan kodu ===== #}
+  {% if step == "scan" %}
+  <form method="post" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="scan">
+    <input
+      type="text"
+      name="code"
+      class="form-control scan-input"
+      placeholder="np. 123456"
+      autofocus
+      required
+    >
+    <button type="submit" class="btn btn-primary btn-pickup">Szukaj paczki →</button>
+  </form>
+
+  {# ===== KROK 2: potwierdzenie odbioru ===== #}
+  {% elif step == "confirm" %}
+  <div class="pkg-info">
+    <div class="row g-3">
+      <div class="col-6">
+        <div class="label">Kod paczki</div>
+        <div class="value">{{ pkg.code }}</div>
+      </div>
+      <div class="col-6">
+        <div class="label">Nadawca</div>
+        <div class="value">{{ pkg.sender.name }}</div>
+      </div>
+      <div class="col-12">
+        <div class="label">Odbiorca</div>
+        <div class="value">{{ pkg.recipient.name }}</div>
+      </div>
+      <div class="col-12">
+        <div class="label">Data dostarczenia</div>
+        <div class="value">{{ pkg.delivered_at|date:"d.m.Y, H:i" }}</div>
+      </div>
+    </div>
+  </div>
+
+  <form method="post" autocomplete="off">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="confirm">
+    <input type="hidden" name="code" value="{{ pkg.code }}">
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Imię i nazwisko osoby odbierającej</label>
+      <input
+        type="text"
+        name="collected_by_name"
+        class="form-control scan-input"
+        placeholder="np. Jan Kowalski"
+        autofocus
+        required
+        value="{{ pkg.recipient.name }}"
+      >
+    </div>
+    <button type="submit" class="btn btn-success btn-pickup">✅ Potwierdź odbiór</button>
+  </form>
+  <form method="post" class="mt-2">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="scan">
+    <button type="submit" class="btn btn-outline-secondary btn-reset w-100">← Wróć / skanuj inną</button>
+  </form>
+
+  {# ===== KROK 3: sukces ===== #}
+  {% elif step == "done" %}
+  <div class="done-icon">✅</div>
+  <h2 class="text-center mt-3 text-success">Paczka odebrana!</h2>
+  <p class="text-center text-muted mt-2">Możesz zamknąć tę stronę lub zeskanować kolejną paczkę.</p>
+  <form method="post" class="mt-4">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="scan">
+    <button type="submit" class="btn btn-primary btn-pickup">📦 Odbierz kolejną paczkę</button>
+  </form>
+  {% endif %}
+
+</div>
+
+{# Lista paczek w paczkomacie — dla orientacji użytkownika #}
+{% if packages and step == "scan" %}
+<div style="max-width:700px; margin: 0 auto 60px;">
+  <h5 class="text-muted mb-3 px-2">Paczki aktualnie w paczkomacie ({{ packages|length }})</h5>
+  <div class="table-responsive">
+    <table class="table table-striped table-sm inbox-table bg-white rounded shadow-sm">
+      <thead class="table-light">
+        <tr><th>#</th><th>Kod</th><th>Odbiorca</th><th>Nadawca</th><th>Dostarczona</th></tr>
+      </thead>
+      <tbody>
+        {% for p in packages %}
+        <tr>
+          <td>{{ forloop.counter }}</td>
+          <td class="fw-bold">{{ p.code }}</td>
+          <td>{{ p.recipient.name }}</td>
+          <td>{{ p.sender.name }}</td>
+          <td>{{ p.delivered_at|date:"d.m.Y, H:i" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+</body>
+</html>
