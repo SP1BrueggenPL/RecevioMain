@@ -17,7 +17,7 @@ from django.contrib import auth
 from .forms import UserLoginForm
 from .utils import clean_next_url
 from django.http import JsonResponse
-from .sms_gateway import SMSGateway
+# from .sms_gateway import SMSGateway  # Replaced by email notifications
 from django.utils import timezone
 from django.conf import settings
 from django.http import HttpResponse
@@ -69,29 +69,48 @@ def _mark_timeout_later(model_cls, pk, field_name, seconds=5):
             model_cls.objects.filter(pk=pk).update(**{field_name: 'timeout'})
     Thread(target=_timer, daemon=True).start()
 
-def print_badge_async(visitor_id, zpl_payload, soft_timeout=5):
+def print_badge_async(visitor_id, zpl_payload, soft_timeout=5, printer_ip='10.30.40.150', printer_port=9100):
     from GuestBook.models import Visitor
     def _worker():
         try:
-            send_zpl_to_printer(zpl_payload)
+            send_zpl_to_printer(zpl_payload, printer_ip=printer_ip, port=printer_port)
             Visitor.objects.filter(id=visitor_id, print_status='pending').update(print_status='printed')
         except Exception:
             Visitor.objects.filter(id=visitor_id, print_status='pending').update(print_status='error')
     Thread(target=_worker, daemon=True).start()
     _mark_timeout_later(Visitor, visitor_id, 'print_status', seconds=soft_timeout)
 
-def send_sms_async(visitor_id, number, message, soft_timeout=5):
+# def send_sms_async(visitor_id, number, message, soft_timeout=5):  # SMS disabled
+#     from GuestBook.models import Visitor
+#     def _worker():
+#         try:
+#             sms = SMSGateway()
+#             res = sms.send_sms(number, message)
+#             ok = bool(res and res.get('status') == 'success')
+#             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(
+#                 sms_status='sent' if ok else 'error'
+#             )
+#         except Exception:
+#             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='error')
+#     Thread(target=_worker, daemon=True).start()
+#     _mark_timeout_later(Visitor, visitor_id, 'sms_status', seconds=soft_timeout)
+
+def send_email_to_host(visitor_id, host_email, subject, message, soft_timeout=5):
+    """Send email notification to host asynchronously (replaces SMS)."""
     from GuestBook.models import Visitor
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
     def _worker():
         try:
-            sms = SMSGateway()
-            res = sms.send_sms(number, message)
-            ok = bool(res and res.get('status') == 'success')
-            Visitor.objects.filter(id=visitor_id, sms_status='pending').update(
-                sms_status='sent' if ok else 'error'
-            )
+            if not host_email:
+                Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='skipped')
+                return
+            send_mail(subject, message, _s.DEFAULT_FROM_EMAIL, [host_email], fail_silently=False)
+            Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='sent')
         except Exception:
             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='error')
+
     Thread(target=_worker, daemon=True).start()
     _mark_timeout_later(Visitor, visitor_id, 'sms_status', seconds=soft_timeout)
 
@@ -579,31 +598,27 @@ def finish_registration(request, visitor_id):
         visitor.print_status = "error"
         visitor.save(update_fields=["print_status"])
 
-    # --- SMS do gospodarza fire-and-forget ---
+    # --- Email do gospodarza fire-and-forget (SMS disabled) ---
     try:
-        number = visitor.host.phone if visitor.host else None
-        if number:
-            status_alergen = (
-                "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów."
-                if _is_yes(visitor.safety_question_3) else ""
-            )
-            company_for_msg = _company_display(visitor)
-            message = (
-                f"Informacja o przybyciu gościa.\n\n"
-                f"Dane:\n"
-                f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
-                f"Telefon: {visitor.phone}\n"
-                f"Firma: {company_for_msg}\n"
-                f"Cel wizyty: {visitor.visit_purpose}\n\n"
-                f"Gość oczekuje na odebranie z recepcji.\n\n"
-                f"{status_alergen}"
-            )
-            visitor.sms_status = "pending"
-            visitor.save(update_fields=["sms_status"])
-            send_sms_async(visitor.id, number, message)  # NIE czekamy
-        else:
-            visitor.sms_status = "skipped"
-            visitor.save(update_fields=["sms_status"])
+        host_email = visitor.host.email if visitor.host else ''
+        status_alergen = (
+            "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów."
+            if _is_yes(visitor.safety_question_3) else ""
+        )
+        company_for_msg = _company_display(visitor)
+        message = (
+            f"Informacja o przybyciu gościa.\n\n"
+            f"Dane:\n"
+            f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
+            f"Telefon: {visitor.phone}\n"
+            f"Firma: {company_for_msg}\n"
+            f"Cel wizyty: {visitor.visit_purpose}\n\n"
+            f"Gość oczekuje na odebranie z recepcji.\n\n"
+            f"{status_alergen}"
+        )
+        visitor.sms_status = "pending"
+        visitor.save(update_fields=["sms_status"])
+        send_email_to_host(visitor.id, host_email, 'New visitor arrived', message)
     except Exception:
         visitor.sms_status = "error"
         visitor.save(update_fields=["sms_status"])
@@ -1002,30 +1017,35 @@ import threading
 import logging
 logger = logging.getLogger(__name__)
 
-def send_sms_with_timeout(number: str, message: str, timeout: int = 5) -> str:
-    """
-    Fire-and-forget z twardym timeoutem join() — nie blokuje requestu > timeout.
-    Zwraca: 'sent' | 'error' | 'timeout'
-    """
-    result = {"status": "timeout"}
+# def send_sms_with_timeout(number: str, message: str, timeout: int = 5) -> str:  # SMS disabled
+#     ...replaced by send_email_with_timeout...
+
+def send_email_with_timeout(email: str, subject: str, message: str, timeout: int = 5) -> str:
+    """Send email with timeout. Returns 'sent' | 'error' | 'timeout' | 'skipped'."""
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
+    if not email:
+        return 'skipped'
+
+    result = {'status': 'timeout'}
 
     def _worker():
         try:
-            sms = SMSGateway()
-            resp = sms.send_sms(number, message)
-            result["status"] = "sent" if resp.get("status") == "success" else "error"
+            send_mail(subject, message, _s.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            result['status'] = 'sent'
         except Exception as e:
-            logger.exception("[SMS EXIT ERROR] %s", e)
-            result["status"] = "error"
+            logger.exception('[EMAIL ERROR] %s', e)
+            result['status'] = 'error'
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
     t.join(timeout)
     if t.is_alive():
-        logger.warning("[SMS EXIT TIMEOUT] No response from gateway within %ss (to: %s)", timeout, number)
-        # wątek nadal leci w tle, ale nie blokujemy UI
-        return "timeout"
-    return result["status"]
+        logger.warning('[EMAIL TIMEOUT] No response within %ss (to: %s)', timeout, email)
+        return 'timeout'
+    return result['status']
+
 
 # utils_timeout.py (lub inny plik helpers)
 from threading import Thread
@@ -1033,39 +1053,31 @@ from django.contrib.auth.models import Group
 from .models import AdminProfile  # dostosuj ścieżkę importu do swojej struktury
 
 
-def send_group_sms_async(group_name: str, text: str, timeout: int = 5):
-    """
-    Fire-and-forget: uruchamia osobny wątek per numer w grupie (GuestBook_Reception itp.).
-    Każdy numer dostaje indywidualny timeout.
-    """
+def send_group_email_async(group_name: str, subject: str, text: str, timeout: int = 5):
+    """Send email to all users in a Django group (replaces group SMS)."""
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
     try:
         group = Group.objects.get(name=group_name)
     except Group.DoesNotExist:
-        print(f"[SMS GROUP] Group '{group_name}' does not exist")
         return
 
-    # ⬇️ numery z AdminProfile.phone_number
-    qs = (AdminProfile.objects
-          .filter(user__in=group.user_set.all(),
-                  phone_number__isnull=False)
-          .exclude(phone_number="")
-          .values_list('phone_number', flat=True))
+    emails = list(
+        AdminProfile.objects
+        .filter(user__in=group.user_set.all())
+        .exclude(email='')
+        .exclude(email='-')
+        .values_list('email', flat=True)
+    )
 
-    # prosta normalizacja + deduplikacja
-    def _clean(num: str) -> str:
-        return (num or "").strip()
-
-    numbers = { _clean(n) for n in qs if _clean(n) }
-
-    def _worker(num: str):
-        try:
-            status = send_sms_with_timeout(num, text, timeout=timeout)
-            print(f"[SMS GROUP {group_name}] {num} -> {status}")
-        except Exception as e:
-            print(f"[SMS GROUP {group_name}] {num} -> fatal: {e}")
-
-    for num in numbers:
-        Thread(target=_worker, args=(num,), daemon=True).start()
+    for addr in set(emails):
+        def _send(a=addr):
+            try:
+                send_mail(subject, text, _s.DEFAULT_FROM_EMAIL, [a], fail_silently=True)
+            except Exception:
+                pass
+        Thread(target=_send, daemon=True).start()
 
 
 

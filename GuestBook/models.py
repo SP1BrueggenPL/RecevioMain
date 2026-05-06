@@ -15,6 +15,7 @@ LANGUAGE_CHOICES = (
 class Host(models.Model):
     host_name = models.CharField(max_length=100)
     phone = models.CharField(max_length=9)
+    email = models.EmailField(blank=True, default='')
 
     def __str__(self):
         return self.host_name
@@ -119,6 +120,8 @@ class AdminProfile(models.Model):
     email = models.EmailField(max_length=100, default="-")
     signature = models.ImageField(upload_to='admin_signatures/', blank=True, null=True)
     phone_number = models.CharField(max_length=50, blank=True, null=True)
+    printer_address = models.CharField(max_length=200, blank=True, default='10.30.40.150', verbose_name='Printer IP/hostname')
+    printer_port = models.IntegerField(default=9100, verbose_name='Printer port')
 
 
 class Reservation(models.Model):
@@ -236,6 +239,20 @@ class Recipient(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class KioskSettings(models.Model):
+    """Singleton model for kiosk-wide settings (printer etc.)."""
+    printer_address = models.CharField(max_length=200, default='10.30.40.150')
+    printer_port = models.IntegerField(default=9100)
+
+    class Meta:
+        verbose_name = 'Kiosk Settings'
+
+    @classmethod
+    def get(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
 
 
 class Package(models.Model):
