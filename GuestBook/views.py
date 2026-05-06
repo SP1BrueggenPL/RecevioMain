@@ -17,7 +17,7 @@ from django.contrib import auth
 from .forms import UserLoginForm
 from .utils import clean_next_url
 from django.http import JsonResponse
-from .sms_gateway import SMSGateway
+# from .sms_gateway import SMSGateway  # Replaced by email notifications
 from django.utils import timezone
 from django.conf import settings
 from django.http import HttpResponse
@@ -69,29 +69,48 @@ def _mark_timeout_later(model_cls, pk, field_name, seconds=5):
             model_cls.objects.filter(pk=pk).update(**{field_name: 'timeout'})
     Thread(target=_timer, daemon=True).start()
 
-def print_badge_async(visitor_id, zpl_payload, soft_timeout=5):
+def print_badge_async(visitor_id, zpl_payload, soft_timeout=5, printer_ip='10.30.40.150', printer_port=9100):
     from GuestBook.models import Visitor
     def _worker():
         try:
-            send_zpl_to_printer(zpl_payload)
+            send_zpl_to_printer(zpl_payload, printer_ip=printer_ip, port=printer_port)
             Visitor.objects.filter(id=visitor_id, print_status='pending').update(print_status='printed')
         except Exception:
             Visitor.objects.filter(id=visitor_id, print_status='pending').update(print_status='error')
     Thread(target=_worker, daemon=True).start()
     _mark_timeout_later(Visitor, visitor_id, 'print_status', seconds=soft_timeout)
 
-def send_sms_async(visitor_id, number, message, soft_timeout=5):
+# def send_sms_async(visitor_id, number, message, soft_timeout=5):  # SMS disabled
+#     from GuestBook.models import Visitor
+#     def _worker():
+#         try:
+#             sms = SMSGateway()
+#             res = sms.send_sms(number, message)
+#             ok = bool(res and res.get('status') == 'success')
+#             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(
+#                 sms_status='sent' if ok else 'error'
+#             )
+#         except Exception:
+#             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='error')
+#     Thread(target=_worker, daemon=True).start()
+#     _mark_timeout_later(Visitor, visitor_id, 'sms_status', seconds=soft_timeout)
+
+def send_email_to_host(visitor_id, host_email, subject, message, soft_timeout=5):
+    """Send email notification to host asynchronously (replaces SMS)."""
     from GuestBook.models import Visitor
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
     def _worker():
         try:
-            sms = SMSGateway()
-            res = sms.send_sms(number, message)
-            ok = bool(res and res.get('status') == 'success')
-            Visitor.objects.filter(id=visitor_id, sms_status='pending').update(
-                sms_status='sent' if ok else 'error'
-            )
+            if not host_email:
+                Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='skipped')
+                return
+            send_mail(subject, message, _s.DEFAULT_FROM_EMAIL, [host_email], fail_silently=False)
+            Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='sent')
         except Exception:
             Visitor.objects.filter(id=visitor_id, sms_status='pending').update(sms_status='error')
+
     Thread(target=_worker, daemon=True).start()
     _mark_timeout_later(Visitor, visitor_id, 'sms_status', seconds=soft_timeout)
 
@@ -570,8 +589,13 @@ def finish_registration(request, visitor_id):
             # Ustaw od razu stan oczekujący
             visitor.print_status = "pending"
             visitor.save(update_fields=["print_status"])
-            # Odpal druk w tle
-            print_badge_async(visitor.id, zpl_filled, soft_timeout=5)
+            # Odpal druk w tle (kiosk – używa KioskSettings)
+            from .models import KioskSettings
+            _ks = KioskSettings.get()
+            _printer_ip = _ks.printer_address
+            _printer_port = _ks.printer_port
+            print_badge_async(visitor.id, zpl_filled, soft_timeout=5,
+                              printer_ip=_printer_ip, printer_port=_printer_port)
         else:
             visitor.print_status = "skipped"
             visitor.save(update_fields=["print_status"])
@@ -579,31 +603,27 @@ def finish_registration(request, visitor_id):
         visitor.print_status = "error"
         visitor.save(update_fields=["print_status"])
 
-    # --- SMS do gospodarza fire-and-forget ---
+    # --- Email do gospodarza fire-and-forget (SMS disabled) ---
     try:
-        number = visitor.host.phone if visitor.host else None
-        if number:
-            status_alergen = (
-                "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów."
-                if _is_yes(visitor.safety_question_3) else ""
-            )
-            company_for_msg = _company_display(visitor)
-            message = (
-                f"Informacja o przybyciu gościa.\n\n"
-                f"Dane:\n"
-                f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
-                f"Telefon: {visitor.phone}\n"
-                f"Firma: {company_for_msg}\n"
-                f"Cel wizyty: {visitor.visit_purpose}\n\n"
-                f"Gość oczekuje na odebranie z recepcji.\n\n"
-                f"{status_alergen}"
-            )
-            visitor.sms_status = "pending"
-            visitor.save(update_fields=["sms_status"])
-            send_sms_async(visitor.id, number, message)  # NIE czekamy
-        else:
-            visitor.sms_status = "skipped"
-            visitor.save(update_fields=["sms_status"])
+        host_email = visitor.host.email if visitor.host else ''
+        status_alergen = (
+            "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów."
+            if _is_yes(visitor.safety_question_3) else ""
+        )
+        company_for_msg = _company_display(visitor)
+        message = (
+            f"Informacja o przybyciu gościa.\n\n"
+            f"Dane:\n"
+            f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
+            f"Telefon: {visitor.phone}\n"
+            f"Firma: {company_for_msg}\n"
+            f"Cel wizyty: {visitor.visit_purpose}\n\n"
+            f"Gość oczekuje na odebranie z recepcji.\n\n"
+            f"{status_alergen}"
+        )
+        visitor.sms_status = "pending"
+        visitor.save(update_fields=["sms_status"])
+        send_email_to_host(visitor.id, host_email, 'New visitor arrived', message)
     except Exception:
         visitor.sms_status = "error"
         visitor.save(update_fields=["sms_status"])
@@ -937,24 +957,21 @@ def finish_registration_trusted_view(request, visitor_id):
     else:
         visitor.print_status = "skipped"
 
-    # --- SMS do gospodarza (nie blokuj widoku) ---
-    number = visitor.host.phone if visitor.host else None
-    if number:
-        status_alergen = "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów." \
-            if _is_yes(visitor.safety_question_3) else ""
-        message = (
-            f"Informacja o przybyciu gościa.\n\n"
-            f"Dane:\n"
-            f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
-            f"Telefon: {visitor.phone}\n"
-            f"Firma: {_company_display(visitor)}\n"
-            f"Cel wizyty: {visitor.visit_purpose}\n\n"
-            f"Gość przebywa na obszarze zakładu.\n\n"
-            f"{status_alergen}"
-        )
-        visitor.sms_status = "pending"
-    else:
-        visitor.sms_status = "skipped"
+    # --- Email do gospodarza (nie blokuj widoku) ---
+    host_email = visitor.host.email if visitor.host else ''
+    status_alergen = "Uwaga - Gość jest uczulony na jeden lub więcej naszych alergenów." \
+        if _is_yes(visitor.safety_question_3) else ""
+    message = (
+        f"Informacja o przybyciu gościa.\n\n"
+        f"Dane:\n"
+        f"Imię i nazwisko: {visitor.first_name} {visitor.last_name}\n"
+        f"Telefon: {visitor.phone}\n"
+        f"Firma: {_company_display(visitor)}\n"
+        f"Cel wizyty: {visitor.visit_purpose}\n\n"
+        f"Gość przebywa na obszarze zakładu.\n\n"
+        f"{status_alergen}"
+    )
+    visitor.sms_status = "pending"
 
     # ✅ zapisz bieżący stan zanim odpalimy wątki
     visitor.save(update_fields=[
@@ -963,10 +980,12 @@ def finish_registration_trusted_view(request, visitor_id):
 
     # --- odpal wątki (fire & forget) ---
     if should_print and zpl_payload and visitor.print_status == "pending":
-        print_badge_async(visitor.id, zpl_payload, soft_timeout=5)
+        from .models import KioskSettings
+        _ks = KioskSettings.get()
+        print_badge_async(visitor.id, zpl_payload, soft_timeout=5,
+                          printer_ip=_ks.printer_address, printer_port=_ks.printer_port)
 
-    if number and visitor.sms_status == "pending":
-        send_sms_async(visitor.id, number, message, soft_timeout=5)
+    send_email_to_host(visitor.id, host_email, 'New visitor arrived', message)
 
     # --- kolor etykiety na ekranie (informacyjnie) ---
     show_badge = should_print
@@ -1002,30 +1021,35 @@ import threading
 import logging
 logger = logging.getLogger(__name__)
 
-def send_sms_with_timeout(number: str, message: str, timeout: int = 5) -> str:
-    """
-    Fire-and-forget z twardym timeoutem join() — nie blokuje requestu > timeout.
-    Zwraca: 'sent' | 'error' | 'timeout'
-    """
-    result = {"status": "timeout"}
+# def send_sms_with_timeout(number: str, message: str, timeout: int = 5) -> str:  # SMS disabled
+#     ...replaced by send_email_with_timeout...
+
+def send_email_with_timeout(email: str, subject: str, message: str, timeout: int = 5) -> str:
+    """Send email with timeout. Returns 'sent' | 'error' | 'timeout' | 'skipped'."""
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
+    if not email:
+        return 'skipped'
+
+    result = {'status': 'timeout'}
 
     def _worker():
         try:
-            sms = SMSGateway()
-            resp = sms.send_sms(number, message)
-            result["status"] = "sent" if resp.get("status") == "success" else "error"
+            send_mail(subject, message, _s.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+            result['status'] = 'sent'
         except Exception as e:
-            logger.exception("[SMS EXIT ERROR] %s", e)
-            result["status"] = "error"
+            logger.exception('[EMAIL ERROR] %s', e)
+            result['status'] = 'error'
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
     t.join(timeout)
     if t.is_alive():
-        logger.warning("[SMS EXIT TIMEOUT] No response from gateway within %ss (to: %s)", timeout, number)
-        # wątek nadal leci w tle, ale nie blokujemy UI
-        return "timeout"
-    return result["status"]
+        logger.warning('[EMAIL TIMEOUT] No response within %ss (to: %s)', timeout, email)
+        return 'timeout'
+    return result['status']
+
 
 # utils_timeout.py (lub inny plik helpers)
 from threading import Thread
@@ -1033,39 +1057,31 @@ from django.contrib.auth.models import Group
 from .models import AdminProfile  # dostosuj ścieżkę importu do swojej struktury
 
 
-def send_group_sms_async(group_name: str, text: str, timeout: int = 5):
-    """
-    Fire-and-forget: uruchamia osobny wątek per numer w grupie (GuestBook_Reception itp.).
-    Każdy numer dostaje indywidualny timeout.
-    """
+def send_group_email_async(group_name: str, subject: str, text: str, timeout: int = 5):
+    """Send email to all users in a Django group (replaces group SMS)."""
+    from django.core.mail import send_mail
+    from django.conf import settings as _s
+
     try:
         group = Group.objects.get(name=group_name)
     except Group.DoesNotExist:
-        print(f"[SMS GROUP] Group '{group_name}' does not exist")
         return
 
-    # ⬇️ numery z AdminProfile.phone_number
-    qs = (AdminProfile.objects
-          .filter(user__in=group.user_set.all(),
-                  phone_number__isnull=False)
-          .exclude(phone_number="")
-          .values_list('phone_number', flat=True))
+    emails = list(
+        AdminProfile.objects
+        .filter(user__in=group.user_set.all())
+        .exclude(email='')
+        .exclude(email='-')
+        .values_list('email', flat=True)
+    )
 
-    # prosta normalizacja + deduplikacja
-    def _clean(num: str) -> str:
-        return (num or "").strip()
-
-    numbers = { _clean(n) for n in qs if _clean(n) }
-
-    def _worker(num: str):
-        try:
-            status = send_sms_with_timeout(num, text, timeout=timeout)
-            print(f"[SMS GROUP {group_name}] {num} -> {status}")
-        except Exception as e:
-            print(f"[SMS GROUP {group_name}] {num} -> fatal: {e}")
-
-    for num in numbers:
-        Thread(target=_worker, args=(num,), daemon=True).start()
+    for addr in set(emails):
+        def _send(a=addr):
+            try:
+                send_mail(subject, text, _s.DEFAULT_FROM_EMAIL, [a], fail_silently=True)
+            except Exception:
+                pass
+        Thread(target=_send, daemon=True).start()
 
 
 
@@ -1106,15 +1122,16 @@ def exit_done_view(request, visitor_id=None):
     if not visitor:
         return render(request, 'kiosk/exit_done.html', {'info': _("Visit closed.")})
 
-    # SMS do recepcji (grupa GuestBook_Reception), fire-and-forget, timeout 5s per numer
+    # Email do recepcji (grupa GuestBook_Reception), fire-and-forget
     try:
         msg = (
             f"Informacja: gość {visitor.first_name} {visitor.last_name} zakończył wizytę.\n"
             f"ID: {visitor.visitor_id}"
         )
-        send_group_sms_async("GuestBook_Reception", msg, timeout=5)
+        send_group_email_async('GuestBook_Reception', 'Visitor exit notification',
+                               f"Guest {visitor.first_name} {visitor.last_name} has ended their visit. Badge ID: {visitor.visitor_id}")
     except Exception as e:
-        print(f"[SMS EXIT FATAL] {e}")
+        print(f"[EMAIL EXIT FATAL] {e}")
 
     return render(request, 'kiosk/exit_done.html')
 
@@ -1415,9 +1432,9 @@ def complete_code_view(request, reservation_id=None):
     except Exception:
         visitor.print_status = "error"
 
-    # 5) SMS (max 5s) – do gospodarza
+    # 5) Email (max 5s) – do gospodarza (zastąpienie SMS)
     try:
-        if visitor.host and visitor.host.phone:
+        if visitor.host and visitor.host.email:
             status_msg = (
                 "Gość oczekuje na odebranie z recepcji."
                 if visitor.with_supervision else
@@ -1437,10 +1454,10 @@ def complete_code_view(request, reservation_id=None):
                 f"{status_msg}\n\n"
                 f"{status_alergen}"
             )
-            status = send_sms_with_timeout(visitor.host.phone, message, timeout=5)
+            status = send_email_with_timeout(visitor.host.email, 'New visitor arrived', message, timeout=5)
             visitor.sms_status = {"sent": "sent", "timeout": "timeout", "error": "error"}.get(status, "error")
         else:
-            visitor.sms_status = "no_number"
+            visitor.sms_status = "skipped"
     except Exception:
         visitor.sms_status = "error"
 
@@ -1640,6 +1657,17 @@ def profile_view(request):
                 messages.success(request, 'Password changed successfully.')
             else:
                 messages.error(request, 'Error changing password.')
+
+        elif 'printer_submit' in request.POST:
+            printer_address = request.POST.get('printer_address', '').strip()
+            printer_port_str = request.POST.get('printer_port', '9100').strip()
+            try:
+                profile.printer_address = printer_address
+                profile.printer_port = int(printer_port_str)
+                profile.save()
+                messages.success(request, 'Printer settings saved.')
+            except ValueError:
+                messages.error(request, 'Invalid port number.')
 
         elif 'request_res_access' in request.POST:
             if has_res_access:
@@ -2197,7 +2225,10 @@ def reprint_badge_view(request, pk):
             supervisor=visitor.host.host_name if visitor.host else ''
         )
 
-        send_zpl_to_printer(zpl_filled)
+        _profile = AdminProfile.objects.filter(user=request.user).first() if request.user.is_authenticated else None
+        _printer_ip = _profile.printer_address if _profile and _profile.printer_address else '10.30.40.150'
+        _printer_port = _profile.printer_port if _profile else 9100
+        send_zpl_to_printer(zpl_filled, printer_ip=_printer_ip, port=_printer_port)
 
         messages.success(request, _("Etykieta została ponownie wydrukowana."))
     except Exception as e:
@@ -2321,7 +2352,8 @@ def host_add(request):
     if request.method == "POST":
         Host.objects.create(
             host_name=request.POST.get("host_name"),
-            phone=request.POST.get("phone")
+            phone=request.POST.get("phone"),
+            email=request.POST.get("email", ""),
         )
         messages.success(request, "Host added successfully.")
         return redirect("hosts")
@@ -2334,6 +2366,7 @@ def host_edit(request, pk):
     if request.method == "POST":
         host.host_name = request.POST.get("host_name")
         host.phone = request.POST.get("phone")
+        host.email = request.POST.get("email", "")
         host.save()
         messages.success(request, "Host updated successfully.")
         return redirect("hosts")

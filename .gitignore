@@ -10,3 +10,6 @@ build/
 *.sqlite3
 staticfiles/
 .DS_Store
+*.log
+debug.log*
+.claude/
