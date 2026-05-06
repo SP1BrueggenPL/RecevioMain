@@ -32,12 +32,12 @@ pydantic_core==2.46.3
 PyMuPDF==1.24.14
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-pywin32==311
+pywin32==311; sys_platform == "win32"
 requests==2.33.1
 six==1.17.0
 sniffio==1.3.1
 sqlparse==0.5.3
-swagger-client @ file:///C:/Recevio-main/requirements_apps/brevis.one-PythonSDK-v23.01
+# swagger-client (brevis.one-PythonSDK) - on-premise only, not installed on CI/Azure
 tqdm==4.67.3
 typing-inspection==0.4.2
 typing_extensions==4.15.0
