@@ -106,4 +106,6 @@ urlpatterns = [
     path("support/import/recipients/", views.helpdesk_import_recipients, name="helpdesk_import_recipients"),
     path("support/package/<int:pk>/edit/", views.helpdesk_package_edit, name="helpdesk_package_edit"),
 
+    path("admin/test-email/", views.test_email_view, name="test_email"),
+
 ]

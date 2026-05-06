@@ -3428,3 +3428,57 @@ def boxflow_delete_pack(request, pk):
     pkg.delete()
     messages.success(request, f"Package {code} has been delete.")
     return redirect('boxflow_list')
+
+
+@require_POST
+def kiosk_settings_save(request):
+    """Save kiosk printer settings (password-protected)."""
+    from .models import KioskSettings
+    password = request.POST.get('password', '')
+    if password != '0987':
+        return JsonResponse({'ok': False, 'error': 'Wrong password'})
+    ks = KioskSettings.get()
+    ks.printer_address = request.POST.get('printer_address', ks.printer_address).strip()
+    try:
+        ks.printer_port = int(request.POST.get('printer_port', ks.printer_port))
+    except ValueError:
+        pass
+    ks.save()
+    return JsonResponse({'ok': True})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def test_email_view(request):
+    from django.core.mail import send_mail
+    from django.conf import settings as django_settings
+
+    config = {
+        'EMAIL_HOST': getattr(django_settings, 'EMAIL_HOST', '—'),
+        'EMAIL_PORT': getattr(django_settings, 'EMAIL_PORT', '—'),
+        'EMAIL_USE_TLS': getattr(django_settings, 'EMAIL_USE_TLS', False),
+        'EMAIL_USE_SSL': getattr(django_settings, 'EMAIL_USE_SSL', False),
+        'EMAIL_HOST_USER': getattr(django_settings, 'EMAIL_HOST_USER', '—') or '(nie ustawiony)',
+        'DEFAULT_FROM_EMAIL': getattr(django_settings, 'DEFAULT_FROM_EMAIL', '—'),
+        'has_password': bool(getattr(django_settings, 'EMAIL_HOST_PASSWORD', '')),
+    }
+
+    result = None
+    if request.method == 'POST':
+        recipient = request.POST.get('recipient', '').strip()
+        if recipient:
+            try:
+                send_mail(
+                    subject='[Recevio] Test wiadomości e-mail',
+                    message='To jest testowa wiadomość wysłana z systemu Recevio.\n\nJeśli ją otrzymałeś — konfiguracja SMTP działa poprawnie.',
+                    from_email=django_settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[recipient],
+                    fail_silently=False,
+                )
+                result = ('success', f'Wiadomość wysłana do: {recipient}')
+            except Exception as e:
+                result = ('error', str(e))
+        else:
+            result = ('error', 'Podaj adres e-mail odbiorcy.')
+
+    return render(request, 'panel/test_email.html', {'config': config, 'result': result})

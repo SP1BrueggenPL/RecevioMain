@@ -1,0 +1,75 @@
+{% extends 'base_panel.html' %}
+{% block content %}
+
+<section class="intro-single">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-12 col-lg-8 offset-lg-2">
+        <div class="title-single-box">
+          <h1 class="title-single">Test wysyłania e-mail</h1>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="property-grid grid">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-8 offset-md-2">
+
+        <div class="card shadow-sm mb-4">
+          <div class="card-header"><strong>Aktualna konfiguracja SMTP</strong></div>
+          <div class="card-body">
+            <table class="table table-sm mb-0">
+              <tbody>
+                <tr><td>SMTP_HOST</td><td><code>{{ config.EMAIL_HOST }}</code></td></tr>
+                <tr><td>SMTP_PORT</td><td><code>{{ config.EMAIL_PORT }}</code></td></tr>
+                <tr><td>SMTP_USE_TLS</td><td><code>{{ config.EMAIL_USE_TLS }}</code></td></tr>
+                <tr><td>SMTP_USE_SSL</td><td><code>{{ config.EMAIL_USE_SSL }}</code></td></tr>
+                <tr><td>SMTP_USER</td><td><code>{{ config.EMAIL_HOST_USER }}</code></td></tr>
+                <tr><td>DEFAULT_FROM_EMAIL</td><td><code>{{ config.DEFAULT_FROM_EMAIL }}</code></td></tr>
+                <tr>
+                  <td>SMTP_PASSWORD</td>
+                  <td>
+                    {% if config.has_password %}
+                      <span class="badge bg-success">ustawione</span>
+                    {% else %}
+                      <span class="badge bg-danger">NIE ustawione</span>
+                    {% endif %}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {% if result %}
+          {% if result.0 == 'success' %}
+            <div class="alert alert-success">✅ {{ result.1 }}</div>
+          {% else %}
+            <div class="alert alert-danger">❌ Błąd: {{ result.1 }}</div>
+          {% endif %}
+        {% endif %}
+
+        <div class="card shadow-sm">
+          <div class="card-header"><strong>Wyślij testową wiadomość</strong></div>
+          <div class="card-body">
+            <form method="post">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label">Adres e-mail odbiorcy</label>
+                <input type="email" name="recipient" class="form-control" placeholder="np. twoj@email.com" required>
+              </div>
+              <button type="submit" class="btn btn-primary">Wyślij test</button>
+              <a href="{% url 'profile' %}" class="btn btn-secondary ms-2">Wróć</a>
+            </form>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+{% endblock %}
