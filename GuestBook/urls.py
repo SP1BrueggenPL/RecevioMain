@@ -109,4 +109,6 @@ urlpatterns = [
 
     path("admin/test-email/", views.test_email_view, name="test_email"),
 
+    path("kiosk/pickup/", views.public_pickup_view, name="public_pickup"),
+
 ]

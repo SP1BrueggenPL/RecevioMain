@@ -2391,9 +2391,20 @@ def host_import(request):
         for row in sheet.iter_rows(min_row=2, values_only=True):
             host_name = str(row[0]).strip() if row[0] else None
             phone = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            email = str(row[2]).strip() if len(row) > 2 and row[2] else ""
 
             if host_name:
-                Host.objects.get_or_create(host_name=host_name, defaults={"phone": phone})
+                host, created = Host.objects.get_or_create(host_name=host_name, defaults={"phone": phone, "email": email})
+                if not created:
+                    updated = False
+                    if phone and host.phone != phone:
+                        host.phone = phone
+                        updated = True
+                    if email and host.email != email:
+                        host.email = email
+                        updated = True
+                    if updated:
+                        host.save()
 
         messages.success(request, "Hosts imported successfully from Excel.")
         return redirect("hosts")
@@ -3515,3 +3526,73 @@ def test_email_view(request):
             result = ('error', 'Podaj adres e-mail odbiorcy.')
 
     return render(request, 'panel/test_email.html', {'config': config, 'result': result})
+
+
+def public_pickup_view(request):
+    """Public package pickup kiosk — no login required."""
+    step = "scan"
+    pkg = None
+    error = None
+
+    if request.method == "POST":
+        action = request.POST.get("action", "scan")
+
+        if action == "scan":
+            code = (request.POST.get("code") or "").strip()
+            if not code:
+                error = "Zeskanuj lub wpisz kod paczki."
+                step = "scan"
+            else:
+                pkg = Package.objects.select_related("sender", "recipient").filter(code__iexact=code).first()
+                if not pkg:
+                    error = f"Nie znaleziono paczki o kodzie: {code}"
+                    step = "scan"
+                elif pkg.status == Package.Status.ISSUED:
+                    who = pkg.collected_by.name if pkg.collected_by else (pkg.collected_by_name or "nieznana osoba")
+                    error = f"Paczka {pkg.code} została już odebrana przez: {who}."
+                    step = "scan"
+                else:
+                    step = "confirm"
+
+        elif action == "confirm":
+            code = (request.POST.get("code") or "").strip()
+            collected_by_name = (request.POST.get("collected_by_name") or "").strip()
+            pkg = Package.objects.select_related("sender", "recipient").filter(code__iexact=code).first()
+
+            if not pkg or pkg.status == Package.Status.ISSUED:
+                error = "Nieprawidłowy stan paczki. Spróbuj ponownie."
+                step = "scan"
+            elif not collected_by_name:
+                error = "Podaj imię i nazwisko odbierającego."
+                step = "confirm"
+            else:
+                issued_at = timezone.now()
+                pkg.status = Package.Status.ISSUED
+                pkg.issued_at = issued_at
+                pkg.collected_by = None
+                pkg.collected_by_name = collected_by_name
+                pkg.save(update_fields=["status", "issued_at", "collected_by", "collected_by_name"])
+
+                if getattr(pkg.recipient, "email", None):
+                    _subj = f"Paczka odebrana: {pkg.code}"
+                    _body = (
+                        f"Twoja paczka {pkg.code} została odebrana z paczkomatu.\n"
+                        f"Odebrał(a): {collected_by_name}\n"
+                        f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n"
+                        f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
+                    )
+                    _email = pkg.recipient.email
+                    Thread(target=lambda: send_email_with_timeout(_email, _subj, _body, timeout=5), daemon=True).start()
+
+                step = "done"
+
+    packages = Package.objects.select_related("sender", "recipient").filter(
+        status=Package.Status.IN_BOX
+    ).order_by("-delivered_at")
+
+    return render(request, "boxflow/public_pickup.html", {
+        "step": step,
+        "pkg": pkg,
+        "error": error,
+        "packages": packages,
+    })
