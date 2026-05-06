@@ -7,6 +7,40 @@
     background: url("{% static 'backgrounds/start_bg.png' %}") no-repeat center center fixed;
     background-size: cover;
   }
+  #kiosk-settings-btn {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(0,0,0,0.4);
+    color: #fff;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #kiosk-settings-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.6);
+    z-index: 2000;
+    align-items: center;
+    justify-content: center;
+  }
+  #kiosk-settings-overlay.show { display: flex; }
+  #kiosk-settings-modal {
+    background: #fff;
+    border-radius: 12px;
+    padding: 2rem;
+    width: 360px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
 </style>
 
 <div style="width: 500px; margin: auto; padding: 3rem; text-align: center; background-color: rgba(255, 255, 255, 0.85); border-radius: 15px;">
@@ -30,4 +64,96 @@
     </button>
   </form>
 </div>
+
+<!-- Settings gear button -->
+<button id="kiosk-settings-btn" title="Settings" onclick="document.getElementById('kiosk-settings-overlay').classList.add('show')">
+  &#9881;
+</button>
+
+<!-- Settings modal -->
+<div id="kiosk-settings-overlay">
+  <div id="kiosk-settings-modal">
+    <h5 class="mb-3">Kiosk Settings</h5>
+
+    <!-- Step 1: password -->
+    <div id="ks-step-password">
+      <p class="text-muted">Enter admin password to continue.</p>
+      <input type="password" id="ks-password" class="form-control mb-2" placeholder="Password">
+      <div id="ks-password-error" class="text-danger small mb-2" style="display:none;">Wrong password.</div>
+      <button class="btn btn-primary w-100" onclick="ksCheckPassword()">Continue</button>
+      <button class="btn btn-secondary w-100 mt-2" onclick="ksClose()">Cancel</button>
+    </div>
+
+    <!-- Step 2: printer form (shown after correct password) -->
+    <div id="ks-step-form" style="display:none;">
+      <p class="text-muted small">Printer settings</p>
+      <div class="mb-3">
+        <label class="form-label">Printer IP / Hostname</label>
+        <input type="text" id="ks-printer-address" class="form-control" placeholder="10.30.40.150">
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Printer Port</label>
+        <input type="number" id="ks-printer-port" class="form-control" placeholder="9100">
+      </div>
+      <div id="ks-save-status" class="mb-2 small"></div>
+      <button class="btn btn-success w-100" onclick="ksSave()">Save</button>
+      <button class="btn btn-secondary w-100 mt-2" onclick="ksClose()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function ksClose() {
+    document.getElementById('kiosk-settings-overlay').classList.remove('show');
+    document.getElementById('ks-step-password').style.display = '';
+    document.getElementById('ks-step-form').style.display = 'none';
+    document.getElementById('ks-password').value = '';
+    document.getElementById('ks-password-error').style.display = 'none';
+    document.getElementById('ks-save-status').textContent = '';
+  }
+
+  function ksCheckPassword() {
+    var pw = document.getElementById('ks-password').value;
+    if (pw === '0987') {
+      document.getElementById('ks-step-password').style.display = 'none';
+      document.getElementById('ks-password-error').style.display = 'none';
+      document.getElementById('ks-step-form').style.display = '';
+    } else {
+      document.getElementById('ks-password-error').style.display = '';
+    }
+  }
+
+  function ksSave() {
+    var addr = document.getElementById('ks-printer-address').value.trim();
+    var port = document.getElementById('ks-printer-port').value.trim();
+    var statusEl = document.getElementById('ks-save-status');
+    statusEl.textContent = 'Saving...';
+    statusEl.className = 'mb-2 small text-muted';
+
+    var formData = new FormData();
+    formData.append('password', '0987');
+    formData.append('printer_address', addr);
+    formData.append('printer_port', port);
+    formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+    fetch("{% url 'kiosk_settings_save' %}", {
+      method: 'POST',
+      body: formData,
+    })
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        statusEl.textContent = 'Saved successfully.';
+        statusEl.className = 'mb-2 small text-success';
+      } else {
+        statusEl.textContent = 'Error: ' + (data.error || 'Unknown error');
+        statusEl.className = 'mb-2 small text-danger';
+      }
+    })
+    .catch(function() {
+      statusEl.textContent = 'Network error.';
+      statusEl.className = 'mb-2 small text-danger';
+    });
+  }
+</script>
 {% endblock %}

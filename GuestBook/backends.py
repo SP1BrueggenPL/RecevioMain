@@ -1,14 +1,20 @@
-from ldap3 import Server, Connection, ALL, SUBTREE
+from ldap3 import Server, Connection, NONE, SUBTREE
 from django.contrib.auth.models import User, Group
 from django.conf import settings
 from .models import AdminProfile
+
+LDAP_CONNECT_TIMEOUT = 5   # seconds to establish TCP connection
+LDAP_RECEIVE_TIMEOUT = 10  # seconds to wait for LDAP response
 
 
 class LDAPBackend:
     def authenticate(self, request, username=None, password=None):
         ldap_server = settings.LDAP_SERVER_URI
+        if not ldap_server:
+            print("[LDAP] ❌ LDAP_SERVER_URI nie jest ustawiony — pomijam backend LDAP")
+            return None
         ldap_base_dn = settings.LDAP_USER_BASE_DN or "DC=brueggen,DC=com"
-        server = Server(ldap_server, get_info=ALL)
+        server = Server(ldap_server, get_info=NONE, connect_timeout=LDAP_CONNECT_TIMEOUT)
 
         # User DN do logowania
         user_dn = f"{username}@{settings.LDAP_DOMAIN}"
@@ -23,7 +29,8 @@ class LDAPBackend:
                 server,
                 user=settings.LDAP_BIND_DN,
                 password=settings.LDAP_BIND_PASSWORD,
-                auto_bind=True
+                auto_bind=True,
+                receive_timeout=LDAP_RECEIVE_TIMEOUT,
             )
             print(f"[LDAP] ✅ Połączono kontem serwisowym: {settings.LDAP_BIND_DN}")
 
@@ -49,7 +56,8 @@ class LDAPBackend:
                 server,
                 user=f"{settings.LDAP_DOMAIN}\\{username}",
                 password=password,
-                auto_bind=True
+                auto_bind=True,
+                receive_timeout=LDAP_RECEIVE_TIMEOUT,
             )
 
             if not user_conn.bound:

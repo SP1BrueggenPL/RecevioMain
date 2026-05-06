@@ -31,6 +31,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.azurewebsites.net',
+    'https://*.westeurope-01.azurewebsites.net',
+]
+
 
 # Application definition
 
@@ -51,6 +56,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -85,12 +91,19 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+import dj_database_url as _dj_db_url
+
+_DATABASE_URL = os.environ.get('DATABASE_URL')
+if _DATABASE_URL:
+    DATABASES = {'default': _dj_db_url.parse(_DATABASE_URL, conn_max_age=600)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            # On Azure App Service set DB_PATH=/home/db.sqlite3 for persistence
+            'NAME': os.environ.get('DB_PATH', str(BASE_DIR / 'db.sqlite3')),
+        }
     }
-}
 
 
 # Password validation
@@ -130,7 +143,16 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 
-STATIC_ROOT = BASE_DIR / '/static/'
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "mysite.storage.RelaxedManifestStaticFilesStorage",
+    },
+}
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
@@ -161,7 +183,7 @@ LDAP_GROUP_BASE_DN = os.getenv("LDAP_GROUP_BASE_DN")
 
 # Kolejność backendów logowania
 AUTHENTICATION_BACKENDS = [
-    'GuestBook.backends.LDAPBackend',
+    # 'GuestBook.backends.LDAPBackend',  # Disabled: on-premise LDAP not reachable from Azure
     'django.contrib.auth.backends.ModelBackend',
 ]
 
