@@ -1,11 +1,11 @@
-openai>=1.30.0
-whitenoise==6.9.0
-gunicorn==23.0.0
-six==1.17.0
-sqlparse==0.5.3
+annotated-types==0.7.0
+anyio==4.13.0
 asgiref==3.11.1
 certifi==2026.4.22
 charset-normalizer==3.4.7
+colorama==0.4.6
+distro==1.9.0
+dj-database-url==3.1.2
 Django==6.0.4
 django-background-tasks==1.2.8
 django-bootstrap3==25.1
@@ -13,23 +13,34 @@ django-crispy-forms==2.4
 django-dotenv==1.4.2
 django-widget-tweaks==1.5.0
 et_xmlfile==2.0.0
+gunicorn==23.0.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
 idna==3.13
+jiter==0.14.0
 ldap3==2.9.1
 numpy==2.4.4
+openai==2.33.0
 openpyxl==3.1.5
+packaging==26.2
 pandas==3.0.2
 pillow==12.2.0
 pyasn1==0.6.3
+pydantic==2.13.3
+pydantic_core==2.46.3
 PyMuPDF==1.24.14
 python-dateutil==2.9.0.post0
 python-dotenv==1.2.2
-pywin32==311; sys_platform == "win32"
+pywin32==311
 requests==2.33.1
 six==1.17.0
+sniffio==1.3.1
 sqlparse==0.5.3
-# brevis.one-PythonSDK installed from local path on-premise only
-# ./requirements_apps/brevis.one-PythonSDK-v23.01
+# swagger-client (brevis.one-PythonSDK) - local on-premise only, not installed on CI/Azure
+tqdm==4.67.3
+typing-inspection==0.4.2
+typing_extensions==4.15.0
 tzdata==2025.2
 urllib3==2.6.3
-psycopg2-binary
-dj-database-url
+whitenoise==6.9.0

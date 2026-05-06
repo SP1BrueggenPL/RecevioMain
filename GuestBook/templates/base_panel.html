@@ -98,7 +98,6 @@
                   <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
                   <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
-                  <li><a class="dropdown-item" href="{% url 'coming_visitors' %}">ComingVisitors</a></li>
                 </ul>
               </li>
             {% if user|has_group:"Recevio_BoxFlow" %}
@@ -126,10 +125,10 @@
                   VisitLog
                 </a>
                 <ul class="dropdown-menu" aria-labelledby="supportDropdown">
+                    <li><a class="dropdown-item" href="{% url 'statistics' %}">Statistics</a></li>
                   <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
                   <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
-                  <li><a class="dropdown-item" href="{% url 'reservation_visitor' %}">ReservationVisitors</a></li>
                 </ul>
               </li>
             {% if user|has_group:"Recevio_BoxFlow" %}
