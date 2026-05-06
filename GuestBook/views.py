@@ -2886,7 +2886,9 @@ def _call_ai_single(img_data, media_type):
                     "Return JSON with exactly these fields: "
                     "\"sender\" (sender name or company), "
                     "\"recipient\" (recipient — the individual person's name, not the company). "
-                    "If a field cannot be read, use an empty string. "
+                    "IMPORTANT: copy text exactly as it appears on the label, including any "
+                    "asterisks or masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess "
+                    "or complete masked parts. If a field cannot be read, use an empty string. "
                     "Reply with ONLY raw JSON, no markdown, no extra words."
                 )},
             ],
@@ -2901,6 +2903,63 @@ def _call_ai_single(img_data, media_type):
     if isinstance(result, list):
         result = result[0] if result else {}
     return result
+
+
+def _match_masked_name(raw_name, db_names):
+    """
+    Match a possibly-asterisked name (e.g. 'RAF*** ZAW***') against a list of DB names.
+    Strategy (in order):
+      1. Exact match after stripping asterisks (diacritic-insensitive)
+      2. Standard fuzzy match (difflib) on the stripped name
+      3. Token-prefix match: each visible fragment must be a prefix of some word in the candidate
+    Returns the best matching DB name or None.
+    """
+    import re as _re
+    import difflib as _difflib
+    import unicodedata as _ud
+
+    def _norm(s):
+        return _ud.normalize("NFKD", s).encode("ascii", "ignore").decode().upper().strip()
+
+    if not raw_name:
+        return None
+
+    # Strip asterisks → visible text
+    stripped = _re.sub(r"\*+", " ", raw_name).strip()
+    stripped = _re.sub(r"\s+", " ", stripped)
+    norm_stripped = _norm(stripped)
+
+    norm_db = {_norm(n): n for n in db_names}
+
+    # 1. Exact (normalized)
+    if norm_stripped in norm_db:
+        return norm_db[norm_stripped]
+
+    # 2. Standard fuzzy on stripped name
+    close = _difflib.get_close_matches(norm_stripped, norm_db.keys(), n=1, cutoff=0.55)
+    if close:
+        return norm_db[close[0]]
+
+    # 3. Token-prefix: every visible token (≥2 chars) must be a prefix of some word in candidate
+    tokens = [t for t in _re.split(r"[\s*]+", raw_name.upper()) if len(t) >= 2]
+    if tokens:
+        best_name, best_score = None, 0
+        for norm_candidate, orig_name in norm_db.items():
+            cand_tokens = norm_candidate.split()
+            score, matched_all = 0, True
+            for tok in tokens:
+                ntok = _norm(tok)
+                if any(ct.startswith(ntok) for ct in cand_tokens):
+                    score += len(tok)
+                else:
+                    matched_all = False
+                    break
+            if matched_all and score > best_score:
+                best_score, best_name = score, orig_name
+        if best_name:
+            return best_name
+
+    return None
 
 
 @login_required
@@ -3055,37 +3114,28 @@ def boxflow_add_pack(request):
         if prefill:
             initial["delivered_at"] = timezone.now()
 
-            # Try to match sender name to existing Sender (exact then fuzzy)
+            # Try to match sender name to existing Sender (supports masked names like RAF*** ZAW***)
             sender_name = prefill.get("sender", "")
             if sender_name:
                 from .models import Sender as _Sender
-                import difflib as _difflib
-                matched = _Sender.objects.filter(name__iexact=sender_name).first()
-                if not matched:
-                    all_senders = list(_Sender.objects.values_list("name", flat=True))
-                    close = _difflib.get_close_matches(sender_name, all_senders, n=1, cutoff=0.6)
-                    if close:
-                        matched = _Sender.objects.get(name=close[0])
-                if matched:
-                    initial["sender"] = matched
+                all_senders = list(_Sender.objects.values_list("name", flat=True))
+                matched_name = _match_masked_name(sender_name, all_senders)
+                if matched_name:
+                    initial["sender"] = _Sender.objects.get(name=matched_name)
                 else:
                     # Pre-fill new_sender; form.save() will auto-create the Sender on submit
-                    initial["new_sender"] = sender_name
+                    import re as _re
+                    initial["new_sender"] = _re.sub(r"\*+", "", sender_name).strip()
                     ai_sender_name = sender_name
 
-            # Try to match recipient name to existing Recipient (exact then fuzzy)
+            # Try to match recipient name to existing Recipient (supports masked names)
             recipient_name = prefill.get("recipient", "")
             if recipient_name:
                 from .models import Recipient as _Recipient
-                import difflib as _difflib
-                matched_r = _Recipient.objects.filter(name__iexact=recipient_name).first()
-                if not matched_r:
-                    all_recipients = list(_Recipient.objects.values_list("name", flat=True))
-                    close_r = _difflib.get_close_matches(recipient_name, all_recipients, n=1, cutoff=0.55)
-                    if close_r:
-                        matched_r = _Recipient.objects.get(name=close_r[0])
-                if matched_r:
-                    initial["recipient"] = matched_r
+                all_recipients = list(_Recipient.objects.values_list("name", flat=True))
+                matched_r_name = _match_masked_name(recipient_name, all_recipients)
+                if matched_r_name:
+                    initial["recipient"] = _Recipient.objects.get(name=matched_r_name)
                 else:
                     ai_recipient_name = recipient_name
 
