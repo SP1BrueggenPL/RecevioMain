@@ -27,7 +27,8 @@ pywin32==311; sys_platform == "win32"
 requests==2.33.1
 six==1.17.0
 sqlparse==0.5.3
-./requirements_apps/brevis.one-PythonSDK-v23.01
+# brevis.one-PythonSDK installed from local path on-premise only
+# ./requirements_apps/brevis.one-PythonSDK-v23.01
 tzdata==2025.2
 urllib3==2.6.3
 psycopg2-binary
