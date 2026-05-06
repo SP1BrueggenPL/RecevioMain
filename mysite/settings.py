@@ -91,14 +91,19 @@ WSGI_APPLICATION = 'mysite.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        # On Azure App Service set DB_PATH=/home/db.sqlite3 so the database
-        # lives on the persistent /home volume and survives redeployments.
-        'NAME': os.environ.get('DB_PATH', str(BASE_DIR / 'db.sqlite3')),
+import dj_database_url as _dj_db_url
+
+_DATABASE_URL = os.environ.get('DATABASE_URL')
+if _DATABASE_URL:
+    DATABASES = {'default': _dj_db_url.parse(_DATABASE_URL, conn_max_age=600)}
+else:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            # On Azure App Service set DB_PATH=/home/db.sqlite3 for persistence
+            'NAME': os.environ.get('DB_PATH', str(BASE_DIR / 'db.sqlite3')),
+        }
     }
-}
 
 
 # Password validation
@@ -178,7 +183,7 @@ LDAP_GROUP_BASE_DN = os.getenv("LDAP_GROUP_BASE_DN")
 
 # Kolejność backendów logowania
 AUTHENTICATION_BACKENDS = [
-    'GuestBook.backends.LDAPBackend',
+    # 'GuestBook.backends.LDAPBackend',  # Disabled: on-premise LDAP not reachable from Azure
     'django.contrib.auth.backends.ModelBackend',
 ]
 

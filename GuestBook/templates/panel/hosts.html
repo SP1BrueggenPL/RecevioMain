@@ -21,6 +21,7 @@
                 <th>#</th>
                 <th>Host Name</th>
                 <th>Phone</th>
+                <th>Email</th>
                 <th>Actions</th>
               </tr>
             </thead>
@@ -30,6 +31,7 @@
                   <td>{{ forloop.counter }}</td>
                   <td>{{ host.host_name }}</td>
                   <td>{{ host.phone|default:"-" }}</td>
+                  <td>{{ host.email|default:"-" }}</td>
                   <td>
                     <a href="{% url 'host_edit' host.id %}" class="btn btn-sm btn-primary">Edit</a>
                     <a href="{% url 'host_delete' host.id %}" class="btn btn-sm btn-danger"
@@ -38,7 +40,7 @@
                 </tr>
               {% empty %}
                 <tr>
-                  <td colspan="4" class="text-center text-muted">No hosts found</td>
+                  <td colspan="5" class="text-center text-muted">No hosts found</td>
                 </tr>
               {% endfor %}
             </tbody>
