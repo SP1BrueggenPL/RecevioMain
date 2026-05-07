@@ -9,22 +9,22 @@
     width: 65mm;
     height: 40mm;
     font-family: Arial, sans-serif;
-    padding: 2mm 3mm 1mm 3mm;
+    padding: 1.5mm 3mm 1mm 3mm;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     overflow: hidden;
   }
   .code {
-    font-size: 13pt;
+    font-size: 12pt;
     font-weight: 900;
     text-align: center;
     letter-spacing: 1px;
     line-height: 1;
   }
   .info {
-    font-size: 7pt;
-    line-height: 1.4;
+    font-size: 9pt;
+    line-height: 1.35;
   }
   .info div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .barcode-wrap {
@@ -46,17 +46,24 @@
 
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 <script>
+  var nextUrl = "{{ next_url|escapejs }}";
   JsBarcode("#barcode", "{{ pkg.code }}", {
     format: "CODE128",
-    width: 1.6,
-    height: 28,
+    width: 1.2,
+    height: 38,
     displayValue: true,
-    fontSize: 7,
+    fontSize: 8,
     margin: 0,
     textMargin: 1,
     valid: function() {
       window.print();
-      window.addEventListener('afterprint', function() { window.close(); });
+      window.addEventListener('afterprint', function() {
+        if (window.opener) {
+          window.close();
+        } else if (nextUrl) {
+          window.location.href = nextUrl;
+        }
+      });
     }
   });
 </script>

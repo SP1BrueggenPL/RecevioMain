@@ -3110,7 +3110,9 @@ def boxflow_add_pack(request):
                 messages.info(request, f"{len(remaining)} package(s) remaining in batch.")
                 return redirect("boxflow_add_confirm")
             from django.urls import reverse
-            return redirect(reverse("boxflow_detail", args=[pkg.pk]) + "?print=1")
+            detail_url = reverse("boxflow_detail", args=[pkg.pk])
+            print_url = reverse("boxflow_print_label", args=[pkg.pk]) + f"?next={detail_url}"
+            return redirect(print_url)
 
     else:
         # Pre-fill form with AI-extracted data
@@ -3537,7 +3539,8 @@ def visitor_get_zpl(request, pk):
 @boxflow_required
 def boxflow_print_label(request, pk):
     pkg = get_object_or_404(Package.objects.select_related("sender", "recipient"), pk=pk)
-    return render(request, "boxflow/print_label.html", {"pkg": pkg})
+    next_url = request.GET.get("next", "")
+    return render(request, "boxflow/print_label.html", {"pkg": pkg, "next_url": next_url})
 
 
 @login_required

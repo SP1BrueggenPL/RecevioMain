@@ -62,11 +62,4 @@
   </div>
 </section>
 
-{% if request.GET.print %}
-<script>
-  window.addEventListener('load', function() {
-    window.open("{% url 'boxflow_print_label' pkg.pk %}", '_blank');
-  });
-</script>
-{% endif %}
 {% endblock %}
