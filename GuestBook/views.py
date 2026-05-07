@@ -128,6 +128,14 @@ def _timeout_handler(signum, frame):
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
+def _get_printer_for_user(user):
+    """Returns (ip, port) from AdminProfile, or defaults."""
+    if user and user.is_authenticated:
+        profile = AdminProfile.objects.filter(user=user).first()
+        if profile and profile.printer_address:
+            return profile.printer_address, profile.printer_port
+    return '10.30.40.150', 9100
+
 def run_with_timeout(func, *args, seconds=5, **kwargs):
     """
     Uruchamia func(*args, **kwargs) z limitem czasu.
@@ -1448,7 +1456,10 @@ def complete_code_view(request, reservation_id=None):
                 supervisor=visitor.host.host_name if visitor.host else ''
             )
 
-            pr_status = run_with_timeout(send_zpl_to_printer, zpl_filled, seconds=5)
+            from .models import KioskSettings
+            _ks = KioskSettings.get()
+            pr_status = run_with_timeout(send_zpl_to_printer, zpl_filled,
+                                         printer_ip=_ks.printer_address, port=_ks.printer_port, seconds=5)
             visitor.print_status = {"ok": "printed", "timeout": "timeout", "error": "error"}.get(pr_status, "error")
         else:
             visitor.print_status = "skipped"
@@ -3111,7 +3122,9 @@ def boxflow_add_pack(request):
                     delivered_at=pkg.delivered_at.strftime('%d.%m.%Y %H:%M') if pkg.delivered_at else ''
                 )
 
-                pr_status = run_with_timeout(send_zpl_to_printer, zpl_filled, seconds=5)
+                _p_ip, _p_port = _get_printer_for_user(request.user)
+                pr_status = run_with_timeout(send_zpl_to_printer, zpl_filled,
+                                             printer_ip=_p_ip, port=_p_port, seconds=5)
 
                 # mapowanie statusu jak u Ciebie
                 status_map = {"ok": "printed", "timeout": "timeout", "error": "error"}
@@ -3352,8 +3365,9 @@ def boxflow_reprint_label(request, pk):
             template_path=template_path,
         )
 
-        # jeśli masz wrapper `print_label`, użyj jego; w przeciwnym razie wołaj bezpośrednio:
-        pr_status = run_with_timeout(send_zpl_to_printer, zpl, seconds=5)
+        _p_ip, _p_port = _get_printer_for_user(request.user)
+        pr_status = run_with_timeout(send_zpl_to_printer, zpl,
+                                     printer_ip=_p_ip, port=_p_port, seconds=5)
 
         if pr_status == "ok":
             messages.success(request, "The label has been reprinted.")
