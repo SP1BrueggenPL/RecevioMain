@@ -3082,25 +3082,23 @@ def boxflow_add_pack(request):
 
             # 3) Druk odbywa się po stronie klienta przez Zebra Browser Print
 
-            # 4) E-mail do odbiorcy (opcjonalnie) — po commicie + timeout 5s
+            # 4) E-mail do odbiorcy — fire-and-forget w tle, nie blokuje odpowiedzi
             if getattr(pkg.recipient, "email", None):
-                subject = f"Paczka w paczkomacie: {pkg.code}"
-                body = (
+                _email = pkg.recipient.email
+                _subject = f"Paczka w paczkomacie: {pkg.code}"
+                _body = (
                     f"Cześć,\n\n"
                     f"Dla odbiorcy: {getattr(pkg.recipient, 'name', '')} zarejestrowano paczkę w paczkomacie.\n"
                     f"Kod: {pkg.code}\n"
                     f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
                     f"Dostarczono: {pkg.delivered_at:%d.%m.%Y %H:%M}\n\n"
                 )
-
-                def _send_after_commit():
-                    status = send_email_with_timeout(subject, body, [pkg.recipient.email], seconds=5)
-                    if status == "timeout":
-                        messages.warning(request, "Package saved, but email delivery exceeded 5 seconds.")
-                    elif status == "error":
-                        messages.warning(request, "Package saved, but email not sent (error).")
-
-                transaction.on_commit(_send_after_commit)
+                Thread(
+                    target=send_email_with_timeout,
+                    args=(_email, _subject, _body),
+                    kwargs={"timeout": 10},
+                    daemon=True,
+                ).start()
 
             # 5) If there are more packages in the batch queue, advance to the next one
             remaining = request.session.pop("pack_prefill_queue", [])
@@ -3224,25 +3222,23 @@ def boxflow_pack_out(request):
 
             who = collected_by.name if collected_by else collected_by_other
 
-            # ✉️ e-mail po commicie + timeout 5 s
+            # ✉️ e-mail — fire-and-forget w tle
             if getattr(pkg.recipient, "email", None):
-                subject = f"Paczka odebrana: {pkg.code}"
-                body = (
+                _email = pkg.recipient.email
+                _subject = f"Paczka odebrana: {pkg.code}"
+                _body = (
                     f"Cześć,\n\n"
                     f"Twoja paczka {pkg.code} została odebrana z paczkomatu.\n"
                     f"Odebrał(a): {who}\n"
                     f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n"
                     f"Nadawca: {getattr(pkg.sender, 'name', '')}\n\n"
                 )
-
-                def _send_after_commit():
-                    status = send_email_with_timeout(subject, body, [pkg.recipient.email], seconds=5)
-                    if status == "timeout":
-                        messages.warning(request, "Confirmation of receipt: email delivery exceeded 5 seconds.")
-                    elif status == "error":
-                        messages.warning(request, "Confirmation of receipt: email not sent (error).")
-
-                transaction.on_commit(_send_after_commit)
+                Thread(
+                    target=send_email_with_timeout,
+                    args=(_email, _subject, _body),
+                    kwargs={"timeout": 10},
+                    daemon=True,
+                ).start()
 
             messages.success(request, f"Package {pkg.code} has been delivered. Recipient: {who}.")
             return redirect("boxflow_out")
