@@ -3,21 +3,21 @@
 <head>
 <meta charset="UTF-8">
 <style>
-  @page { size: 96mm 59mm; margin: 0; }
+  @page { size: 65mm 40mm; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    width: 96mm; height: 59mm;
+    width: 65mm; height: 40mm;
     font-family: Arial, sans-serif;
-    padding: 3mm 4mm;
+    padding: 2mm 3mm;
     display: flex; flex-direction: column; justify-content: space-between;
   }
   .code {
-    font-size: 22pt; font-weight: 900; letter-spacing: 2px; text-align: center;
-    border-bottom: 1.5px solid #000; padding-bottom: 2mm; margin-bottom: 2mm;
+    font-size: 15pt; font-weight: 900; letter-spacing: 1px; text-align: center;
+    border-bottom: 1px solid #000; padding-bottom: 1mm;
   }
-  .row { font-size: 10pt; margin-bottom: 1.5mm; line-height: 1.3; }
-  .row strong { display: inline-block; width: 22mm; font-weight: 700; }
-  .footer { font-size: 8pt; color: #666; text-align: right; border-top: 0.5px solid #ccc; padding-top: 1mm; }
+  .row { font-size: 7.5pt; margin-top: 1.2mm; line-height: 1.25; }
+  .row strong { display: inline-block; width: 18mm; font-weight: 700; }
+  .footer { font-size: 6pt; color: #666; text-align: right; }
 </style>
 </head>
 <body>
@@ -28,6 +28,6 @@
     <div class="row"><strong>Data:</strong> {{ pkg.delivered_at|date:"d.m.Y, H:i" }}</div>
   </div>
   <div class="footer">Recevio BoxFlow</div>
-</body>
 <script>window.onload = function() { window.print(); };</script>
+</body>
 </html>
