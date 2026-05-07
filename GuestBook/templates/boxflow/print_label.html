@@ -4,16 +4,17 @@
 <meta charset="UTF-8">
 <style>
   @page { size: 65mm 40mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
-    margin: 0; padding: 0;
     width: 65mm; height: 40mm;
     font-family: Arial, sans-serif;
     overflow: hidden;
   }
   .label {
+    position: fixed;
+    top: 0; left: 0;
     width: 65mm; height: 40mm;
     padding: 2mm 3mm 1mm 3mm;
-    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
@@ -59,8 +60,8 @@
     fontSize: 7,
     margin: 0,
     textMargin: 1,
+    valid: function() { window.print(); }
   });
-  window.onload = function() { window.print(); };
 </script>
 </body>
 </html>
