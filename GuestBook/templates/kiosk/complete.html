@@ -60,9 +60,22 @@
   </div>
 </div>
 
+{% if zpl_for_print %}{{ zpl_for_print|json_script:"zpl-data" }}{% endif %}
+<script src="{% static 'js/zebra_print.js' %}"></script>
 <script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const el = document.getElementById('zpl-data');
+    if (el) {
+      const zpl = JSON.parse(el.textContent);
+      ZebraPrint.print(zpl,
+        function () { console.log('[Print] Etykieta wysłana do drukarki.'); },
+        function (err) { console.warn('[Print] Błąd druku:', err); }
+      );
+    }
+  });
+
   setTimeout(function() {
     window.location.href = "{% url 'start' %}";
-  }, 60000); // 60 sekund
+  }, 60000);
 </script>
 {% endblock %}

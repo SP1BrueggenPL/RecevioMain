@@ -585,37 +585,26 @@ def finish_registration(request, visitor_id):
                     badge_id=badge_id,
                 )
 
-    # --- DRUK (max 5s) ---
-    # --- DRUKUJEMY tylko dla produkcji, ale fire-and-forget ---
-    try:
-        if visitor.production_area:
+    # --- Generowanie ZPL do druku po stronie klienta (Zebra Browser Print) ---
+    zpl_for_print = None
+    if visitor.production_area:
+        try:
             template_path = os.path.join(settings.BASE_DIR, 'GuestBook', 'Print_templates', 'template_zebra.zpl')
             with open(template_path, encoding='utf-8') as tpl:
                 zpl_template = tpl.read()
-            company_for_zpl = _company_display(visitor)
-            zpl_filled = zpl_template.format(
-                company=company_for_zpl,
+            zpl_for_print = zpl_template.format(
+                company=_company_display(visitor),
                 first_name=visitor.first_name,
                 last_name=visitor.last_name,
                 visit_purpose=visitor.visit_purpose or '',
                 supervisor=visitor.host.host_name if visitor.host else ''
             )
-            # Ustaw od razu stan oczekujący
             visitor.print_status = "pending"
-            visitor.save(update_fields=["print_status"])
-            # Odpal druk w tle (kiosk – używa KioskSettings)
-            from .models import KioskSettings
-            _ks = KioskSettings.get()
-            _printer_ip = _ks.printer_address
-            _printer_port = _ks.printer_port
-            print_badge_async(visitor.id, zpl_filled, soft_timeout=5,
-                              printer_ip=_printer_ip, printer_port=_printer_port)
-        else:
-            visitor.print_status = "skipped"
-            visitor.save(update_fields=["print_status"])
-    except Exception:
-        visitor.print_status = "error"
-        visitor.save(update_fields=["print_status"])
+        except Exception:
+            visitor.print_status = "error"
+    else:
+        visitor.print_status = "skipped"
+    visitor.save(update_fields=["print_status"])
 
     # --- Email do gospodarza fire-and-forget (SMS disabled) ---
     try:
@@ -656,7 +645,10 @@ def finish_registration(request, visitor_id):
         badge_color = badge_css = None
 
     return render(request, 'kiosk/complete.html', {
-        'badge_color': badge_color, 'badge_css': badge_css, 'is_production': visitor.production_area,
+        'badge_color': badge_color, 'badge_css': badge_css,
+        'is_production': visitor.production_area,
+        'zpl_for_print': zpl_for_print,
+        'visitor_id': visitor.pk,
     })
 
 
@@ -3088,55 +3080,7 @@ def boxflow_add_pack(request):
             pkg.save()
             form.save_m2m()
 
-            # 3) DRUK z pliku (timeout 5s) — „jak w complete_code_view"
-            try:
-                # Ten sam folder co kioskowy szablon:
-                # GuestBook/Print_templates/box_label.zpl
-                template_path = os.path.join(
-                    settings.BASE_DIR, 'GuestBook', 'Print_templates', 'BoxLabelTemplate.zpl'
-                )
-                with open(template_path, encoding='utf-8') as tpl:
-                    zpl_template = tpl.read()
-
-                zpl_filled = zpl_template.format(
-                    code=pkg.code,
-                    sender=pkg.sender.name if pkg.sender else '',
-                    recipient=pkg.recipient.name if pkg.recipient else '',
-                    delivered_at=pkg.delivered_at.strftime('%d.%m.%Y %H:%M') if pkg.delivered_at else ''
-                )
-
-                _p_ip, _p_port = _get_printer_for_user(request.user)
-                pr_status = run_with_timeout(send_zpl_to_printer, zpl_filled,
-                                             printer_ip=_p_ip, port=_p_port, seconds=5)
-
-                # mapowanie statusu jak u Ciebie
-                status_map = {"ok": "printed", "timeout": "timeout", "error": "error"}
-                try:
-                    pkg.print_status = status_map.get(pr_status, "error")
-                    pkg.save(update_fields=["print_status"])
-                except Exception:
-                    # jeśli model nie ma pola print_status – tylko komunikat
-                    pass
-
-                if pr_status == "timeout":
-                    messages.warning(request, "The package has been saved, but the printout exceeded the time limit (5 seconds).")
-                elif pr_status == "error":
-                    messages.warning(request, "Package saved, but label not printed (error).")
-
-            except FileNotFoundError:
-                messages.warning(request, "Package saved, but label template file not found.")
-                try:
-                    pkg.print_status = "error"
-                    pkg.save(update_fields=["print_status"])
-                except Exception:
-                    pass
-            except Exception as e:
-                messages.warning(request, f"Package saved, but label not printed: {e}")
-                try:
-                    pkg.print_status = "error"
-                    pkg.save(update_fields=["print_status"])
-                except Exception:
-                    pass
+            # 3) Druk odbywa się po stronie klienta przez Zebra Browser Print
 
             # 4) E-mail do odbiorcy (opcjonalnie) — po commicie + timeout 5s
             if getattr(pkg.recipient, "email", None):
@@ -3167,7 +3111,8 @@ def boxflow_add_pack(request):
                     request.session["pack_prefill_queue"] = remaining[1:]
                 messages.info(request, f"{len(remaining)} package(s) remaining in batch.")
                 return redirect("boxflow_add_confirm")
-            return redirect("boxflow_add")
+            from django.urls import reverse
+            return redirect(reverse("boxflow_detail", args=[pkg.pk]) + "?print=1")
 
     else:
         # Pre-fill form with AI-extracted data
@@ -3546,6 +3491,50 @@ def test_email_view(request):
             result = ('error', 'Podaj adres e-mail odbiorcy.')
 
     return render(request, 'panel/test_email.html', {'config': config, 'result': result})
+
+
+# ─── ZPL endpoints for Zebra Browser Print ───────────────────────────────────
+
+@login_required
+@boxflow_required
+def boxflow_get_zpl(request, pk):
+    """Returns ZPL for a package label as JSON — consumed by client-side Browser Print."""
+    pkg = get_object_or_404(Package.objects.select_related("sender", "recipient"), pk=pk)
+    template_path = os.path.join(settings.BASE_DIR, "GuestBook", "Print_templates", "BoxLabelTemplate.zpl")
+    try:
+        zpl = render_box_label_from_file(
+            code=pkg.code,
+            sender=pkg.sender.name if pkg.sender else "",
+            recipient=pkg.recipient.name if pkg.recipient else "",
+            template_path=template_path,
+        )
+        return JsonResponse({"zpl": zpl})
+    except FileNotFoundError:
+        return JsonResponse({"error": "Template file not found."}, status=404)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@login_required
+def visitor_get_zpl(request, pk):
+    """Returns ZPL for a visitor badge as JSON — consumed by client-side Browser Print."""
+    visitor = get_object_or_404(Visitor, pk=pk)
+    template_path = os.path.join(settings.BASE_DIR, "GuestBook", "Print_templates", "template_zebra.zpl")
+    try:
+        with open(template_path, encoding="utf-8") as f:
+            tpl = f.read()
+        zpl = tpl.format(
+            company=_company_display(visitor),
+            first_name=visitor.first_name,
+            last_name=visitor.last_name,
+            visit_purpose=visitor.visit_purpose or "",
+            supervisor=visitor.host.host_name if visitor.host else "",
+        )
+        return JsonResponse({"zpl": zpl})
+    except FileNotFoundError:
+        return JsonResponse({"error": "Template file not found."}, status=404)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 
 def public_pickup_view(request):

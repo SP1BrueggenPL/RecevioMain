@@ -1,4 +1,5 @@
 {% extends 'base_panel.html' %}
+{% load static %}
 {% block content %}
 <br><br><br>
 <section class="intro-single">
@@ -49,10 +50,11 @@
   </li>
 </ul>
 
-        <div class="mt-4 d-flex gap-2 flex-wrap">
+        <div class="mt-4 d-flex gap-2 flex-wrap align-items-center">
           <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">Back</a>
-          <a href="{% url 'boxflow_reprint' pkg.pk %}" class="btn btn-outline-primary">Reprint label</a>
-          {% if request.user.groups.all.0.name in 'GuestBook_Helpdesk SupportCenter' %}
+          <button id="btn-reprint" class="btn btn-outline-primary" onclick="reprintLabel()">Reprint label</button>
+          <span id="print-status" class="text-muted small ms-2"></span>
+          {% if is_helpdesk %}
             <a href="{% url 'helpdesk_package_edit' pkg.pk %}" class="btn btn-outline-warning">Edit</a>
           {% endif %}
         </div>
@@ -60,4 +62,43 @@
     </div>
   </div>
 </section>
+
+<script src="{% static 'js/zebra_print.js' %}"></script>
+<script>
+// Auto-print when redirected from Add Package
+if (new URLSearchParams(window.location.search).get('print') === '1') {
+  window.addEventListener('load', function () {
+    // Remove ?print=1 from URL bar without reload
+    history.replaceState(null, '', window.location.pathname);
+    setTimeout(function() { reprintLabel(); }, 500);
+  });
+}
+
+function reprintLabel() {
+  const btn = document.getElementById('btn-reprint');
+  const status = document.getElementById('print-status');
+  btn.disabled = true;
+  status.textContent = 'Wysyłanie do drukarki…';
+
+  fetch("{% url 'boxflow_get_zpl' pkg.pk %}")
+    .then(r => r.json())
+    .then(data => {
+      if (data.error) throw new Error(data.error);
+      ZebraPrint.print(data.zpl,
+        function () {
+          status.textContent = '✅ Etykieta wysłana.';
+          btn.disabled = false;
+        },
+        function (err) {
+          status.textContent = '❌ ' + err;
+          btn.disabled = false;
+        }
+      );
+    })
+    .catch(err => {
+      status.textContent = '❌ ' + err.message;
+      btn.disabled = false;
+    });
+}
+</script>
 {% endblock %}

@@ -111,4 +111,7 @@ urlpatterns = [
 
     path("kiosk/pickup/", views.public_pickup_view, name="public_pickup"),
 
+    path("boxflow/<int:pk>/zpl/", views.boxflow_get_zpl, name="boxflow_get_zpl"),
+    path("visitor/<int:pk>/zpl/", views.visitor_get_zpl, name="visitor_get_zpl"),
+
 ]
