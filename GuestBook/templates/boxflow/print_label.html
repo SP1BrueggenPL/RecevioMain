@@ -4,30 +4,63 @@
 <meta charset="UTF-8">
 <style>
   @page { size: 65mm 40mm; margin: 0; }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
+  html, body {
+    margin: 0; padding: 0;
     width: 65mm; height: 40mm;
     font-family: Arial, sans-serif;
-    padding: 2mm 3mm;
-    display: flex; flex-direction: column; justify-content: space-between;
+    overflow: hidden;
+  }
+  .label {
+    width: 65mm; height: 40mm;
+    padding: 2mm 3mm 1mm 3mm;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
   }
   .code {
-    font-size: 15pt; font-weight: 900; letter-spacing: 1px; text-align: center;
-    border-bottom: 1px solid #000; padding-bottom: 1mm;
+    font-size: 13pt;
+    font-weight: 900;
+    text-align: center;
+    letter-spacing: 1px;
+    line-height: 1;
   }
-  .row { font-size: 7.5pt; margin-top: 1.2mm; line-height: 1.25; }
-  .row strong { display: inline-block; width: 18mm; font-weight: 700; }
-  .footer { font-size: 6pt; color: #666; text-align: right; }
+  .info {
+    font-size: 7pt;
+    line-height: 1.4;
+  }
+  .info div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .barcode-wrap {
+    text-align: center;
+    line-height: 1;
+  }
+  .barcode-wrap svg { display: block; margin: 0 auto; }
 </style>
 </head>
 <body>
+<div class="label">
   <div class="code">{{ pkg.code }}</div>
-  <div>
-    <div class="row"><strong>Nadawca:</strong> {{ pkg.sender }}</div>
-    <div class="row"><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
-    <div class="row"><strong>Data:</strong> {{ pkg.delivered_at|date:"d.m.Y, H:i" }}</div>
+  <div class="info">
+    <div><strong>Nadawca:</strong> {{ pkg.sender }}</div>
+    <div><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
   </div>
-  <div class="footer">Recevio BoxFlow</div>
-<script>window.onload = function() { window.print(); };</script>
+  <div class="barcode-wrap">
+    <svg id="barcode"></svg>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+  JsBarcode("#barcode", "{{ pkg.code }}", {
+    format: "CODE128",
+    width: 1.6,
+    height: 28,
+    displayValue: true,
+    fontSize: 7,
+    margin: 0,
+    textMargin: 1,
+  });
+  window.onload = function() { window.print(); };
+</script>
 </body>
 </html>
