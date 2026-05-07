@@ -179,15 +179,38 @@ def render_box_label_from_file(code: str, sender: str, recipient: str, template_
     return tpl.format(code=code, sender=sender, recipient=recipient)
 
 def send_zpl_to_printer(zpl_data: str, printer_ip='10.30.40.150', port=9100):
-    """Wysyła surowy kod ZPL do drukarki Zebra przez TCP."""
-    try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(10)
-        sock.connect((printer_ip, port))
-        sock.sendall(zpl_data.encode('utf-8'))
-        sock.close()
-    except Exception as e:
-        print(f"[ZEBRA PRINT ERROR] {e}")
+    """Wysyła surowy kod ZPL do drukarki Zebra.
+    Obsługuje dwa tryby:
+    - TCP (IP/hostname + port): bezpośrednie połączenie RAW/9100
+    - UNC (\\\\server\\printer): Windows Print Spooler przez win32print
+    """
+    is_unc = printer_ip.startswith('\\\\') or printer_ip.startswith('//')
+    if is_unc:
+        try:
+            import win32print
+            printer_name = printer_ip.replace('/', '\\')
+            hprinter = win32print.OpenPrinter(printer_name)
+            try:
+                hjob = win32print.StartDocPrinter(hprinter, 1, ("ZPL Badge", None, "RAW"))
+                win32print.StartPagePrinter(hprinter)
+                win32print.WritePrinter(hprinter, zpl_data.encode('utf-8'))
+                win32print.EndPagePrinter(hprinter)
+                win32print.EndDocPrinter(hprinter)
+            finally:
+                win32print.ClosePrinter(hprinter)
+        except ImportError:
+            print("[ZEBRA PRINT ERROR] win32print niedostępny (wymagany Windows). Użyj adresu IP zamiast ścieżki UNC.")
+        except Exception as e:
+            print(f"[ZEBRA PRINT ERROR UNC] {e}")
+    else:
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(10)
+            sock.connect((printer_ip, port))
+            sock.sendall(zpl_data.encode('utf-8'))
+            sock.close()
+        except Exception as e:
+            print(f"[ZEBRA PRINT ERROR] {e}")
 
 try:
     close_expired_visitors_task(repeat=3600)
