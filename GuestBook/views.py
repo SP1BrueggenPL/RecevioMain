@@ -3094,7 +3094,7 @@ def boxflow_add_pack(request):
                 )
 
                 def _send_after_commit():
-                    status = send_email_with_timeout(subject, body, [pkg.recipient.email], seconds=5)
+                    status = send_email_with_timeout(pkg.recipient.email, subject, body, timeout=5)
                     if status == "timeout":
                         messages.warning(request, "Package saved, but email delivery exceeded 5 seconds.")
                     elif status == "error":
@@ -3236,7 +3236,7 @@ def boxflow_pack_out(request):
                 )
 
                 def _send_after_commit():
-                    status = send_email_with_timeout(subject, body, [pkg.recipient.email], seconds=5)
+                    status = send_email_with_timeout(pkg.recipient.email, subject, body, timeout=5)
                     if status == "timeout":
                         messages.warning(request, "Confirmation of receipt: email delivery exceeded 5 seconds.")
                     elif status == "error":
