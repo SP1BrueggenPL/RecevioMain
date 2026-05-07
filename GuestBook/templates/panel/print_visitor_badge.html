@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: 65mm 40mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 65mm; height: 40mm;
+    font-family: Arial, sans-serif;
+    padding: 2mm 3mm;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .name {
+    font-size: 13pt; font-weight: 900; text-align: center;
+    border-bottom: 1px solid #000; padding-bottom: 1mm; line-height: 1.1;
+  }
+  .row { font-size: 7pt; margin-top: 1mm; line-height: 1.25; }
+  .row strong { display: inline-block; width: 18mm; font-weight: 700; }
+  .badge-color {
+    text-align: center; font-size: 7pt; font-weight: bold;
+    padding: 0.5mm 0; border-radius: 1mm;
+  }
+  .badge-red { background: #f00; color: #fff; }
+  .badge-green { background: #0a0; color: #fff; }
+</style>
+</head>
+<body>
+  <div class="name">{{ visitor.first_name }} {{ visitor.last_name }}</div>
+  <div>
+    <div class="row"><strong>Firma:</strong> {{ company }}</div>
+    <div class="row"><strong>Cel:</strong> {{ visitor.visit_purpose }}</div>
+    <div class="row"><strong>Opiekun:</strong> {{ supervisor }}</div>
+  </div>
+  {% if badge_css %}
+  <div class="badge-color badge-{{ badge_css }}">
+    {% if badge_css == 'red' %}Z OPIEKUNEM{% else %}BEZ OPIEKUNA{% endif %}
+  </div>
+  {% endif %}
+<script>window.onload = function() { window.print(); };</script>
+</body>
+</html>

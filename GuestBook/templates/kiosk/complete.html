@@ -61,8 +61,14 @@
 </div>
 
 <script>
+  {% if visitor_id and is_production %}
+  window.addEventListener('load', function() {
+    window.open("{% url 'visitor_print_badge' visitor_id %}", '_blank');
+  });
+  {% endif %}
+
   setTimeout(function() {
     window.location.href = "{% url 'start' %}";
-  }, 60000); // 60 sekund
+  }, 60000);
 </script>
 {% endblock %}

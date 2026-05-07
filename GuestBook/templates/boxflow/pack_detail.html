@@ -1,4 +1,5 @@
 {% extends 'base_panel.html' %}
+{% load static %}
 {% block content %}
 <br><br><br>
 <section class="intro-single">
@@ -49,10 +50,10 @@
   </li>
 </ul>
 
-        <div class="mt-4 d-flex gap-2 flex-wrap">
+        <div class="mt-4 d-flex gap-2 flex-wrap align-items-center">
           <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">Back</a>
-          <a href="{% url 'boxflow_reprint' pkg.pk %}" class="btn btn-outline-primary">Reprint label</a>
-          {% if request.user.groups.all.0.name in 'GuestBook_Helpdesk SupportCenter' %}
+          <a href="{% url 'boxflow_print_label' pkg.pk %}" target="_blank" class="btn btn-outline-primary">Reprint label</a>
+          {% if is_helpdesk %}
             <a href="{% url 'helpdesk_package_edit' pkg.pk %}" class="btn btn-outline-warning">Edit</a>
           {% endif %}
         </div>
@@ -60,4 +61,12 @@
     </div>
   </div>
 </section>
+
+{% if request.GET.print %}
+<script>
+  window.addEventListener('load', function() {
+    window.open("{% url 'boxflow_print_label' pkg.pk %}", '_blank');
+  });
+</script>
+{% endif %}
 {% endblock %}
