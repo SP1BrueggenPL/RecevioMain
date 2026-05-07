@@ -52,8 +52,7 @@
 
         <div class="mt-4 d-flex gap-2 flex-wrap align-items-center">
           <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">Back</a>
-          <button id="btn-reprint" class="btn btn-outline-primary" onclick="reprintLabel()">Reprint label</button>
-          <span id="print-status" class="text-muted small ms-2"></span>
+          <a href="{% url 'boxflow_print_label' pkg.pk %}" target="_blank" class="btn btn-outline-primary">Reprint label</a>
           {% if is_helpdesk %}
             <a href="{% url 'helpdesk_package_edit' pkg.pk %}" class="btn btn-outline-warning">Edit</a>
           {% endif %}
@@ -63,42 +62,11 @@
   </div>
 </section>
 
-<script src="{% static 'js/zebra_print.js' %}"></script>
+{% if request.GET.print %}
 <script>
-// Auto-print when redirected from Add Package
-if (new URLSearchParams(window.location.search).get('print') === '1') {
-  window.addEventListener('load', function () {
-    // Remove ?print=1 from URL bar without reload
-    history.replaceState(null, '', window.location.pathname);
-    setTimeout(function() { reprintLabel(); }, 500);
+  window.addEventListener('load', function() {
+    window.open("{% url 'boxflow_print_label' pkg.pk %}", '_blank');
   });
-}
-
-function reprintLabel() {
-  const btn = document.getElementById('btn-reprint');
-  const status = document.getElementById('print-status');
-  btn.disabled = true;
-  status.textContent = 'Wysyłanie do drukarki…';
-
-  fetch("{% url 'boxflow_get_zpl' pkg.pk %}")
-    .then(r => r.json())
-    .then(data => {
-      if (data.error) throw new Error(data.error);
-      ZebraPrint.print(data.zpl,
-        function () {
-          status.textContent = '✅ Etykieta wysłana.';
-          btn.disabled = false;
-        },
-        function (err) {
-          status.textContent = '❌ ' + err;
-          btn.disabled = false;
-        }
-      );
-    })
-    .catch(err => {
-      status.textContent = '❌ ' + err.message;
-      btn.disabled = false;
-    });
-}
 </script>
+{% endif %}
 {% endblock %}

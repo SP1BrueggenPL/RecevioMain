@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: 96mm 59mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 96mm; height: 59mm;
+    font-family: Arial, sans-serif;
+    padding: 3mm 4mm;
+    display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .code {
+    font-size: 22pt; font-weight: 900; letter-spacing: 2px; text-align: center;
+    border-bottom: 1.5px solid #000; padding-bottom: 2mm; margin-bottom: 2mm;
+  }
+  .row { font-size: 10pt; margin-bottom: 1.5mm; line-height: 1.3; }
+  .row strong { display: inline-block; width: 22mm; font-weight: 700; }
+  .footer { font-size: 8pt; color: #666; text-align: right; border-top: 0.5px solid #ccc; padding-top: 1mm; }
+</style>
+</head>
+<body>
+  <div class="code">{{ pkg.code }}</div>
+  <div>
+    <div class="row"><strong>Nadawca:</strong> {{ pkg.sender }}</div>
+    <div class="row"><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
+    <div class="row"><strong>Data:</strong> {{ pkg.delivered_at|date:"d.m.Y, H:i" }}</div>
+  </div>
+  <div class="footer">Recevio BoxFlow</div>
+</body>
+<script>window.onload = function() { window.print(); };</script>
+</html>

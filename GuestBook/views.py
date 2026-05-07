@@ -3537,6 +3537,27 @@ def visitor_get_zpl(request, pk):
         return JsonResponse({"error": str(e)}, status=500)
 
 
+@login_required
+@boxflow_required
+def boxflow_print_label(request, pk):
+    pkg = get_object_or_404(Package.objects.select_related("sender", "recipient"), pk=pk)
+    return render(request, "boxflow/print_label.html", {"pkg": pkg})
+
+
+@login_required
+def visitor_print_badge(request, pk):
+    visitor = get_object_or_404(Visitor, pk=pk)
+    badge_css = None
+    if visitor.production_area:
+        badge_css = "red" if visitor.with_supervision else "green"
+    return render(request, "panel/print_visitor_badge.html", {
+        "visitor": visitor,
+        "company": _company_display(visitor),
+        "supervisor": visitor.host.host_name if visitor.host else "",
+        "badge_css": badge_css,
+    })
+
+
 def public_pickup_view(request):
     """Public package pickup kiosk — no login required."""
     step = "scan"
