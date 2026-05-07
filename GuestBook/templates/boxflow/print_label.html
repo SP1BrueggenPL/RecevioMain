@@ -60,7 +60,10 @@
     fontSize: 7,
     margin: 0,
     textMargin: 1,
-    valid: function() { window.print(); }
+    valid: function() {
+      window.print();
+      window.addEventListener('afterprint', function() { window.close(); });
+    }
   });
 </script>
 </body>
