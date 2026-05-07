@@ -35,27 +35,6 @@
             <button type="submit" class="btn btn-primary mt-2">Update Signature</button>
           </form>
 
-          <hr>
-
-          <div class="mb-4">
-            <h5>Printer Settings</h5>
-            <form method="post">
-              {% csrf_token %}
-              <input type="hidden" name="printer_submit" value="1">
-              <div class="mb-3">
-                <label for="printer_address" class="form-label"><strong>Printer IP Address</strong></label>
-                <input type="text" id="printer_address" name="printer_address" class="form-control"
-                       value="{{ profile.printer_address }}" placeholder="np. 10.30.40.150">
-                <small class="text-muted">Podaj bezpośredni adres IP drukarki Zebra. Ścieżki UNC (\\serwer\drukarka) nie są obsługiwane.</small>
-              </div>
-              <div class="mb-3">
-                <label for="printer_port" class="form-label"><strong>Printer Port</strong></label>
-                <input type="number" id="printer_port" name="printer_port" class="form-control"
-                       value="{{ profile.printer_port }}" placeholder="9100">
-              </div>
-              <button type="submit" class="btn btn-primary">Save Printer Settings</button>
-            </form>
-          </div>
 
 
         </div>
