@@ -2919,55 +2919,60 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 # --- AI Label Scan ---
 
 def _call_ai_single(img_data, media_type):
-    """OCR label image via Azure AI Vision, then extract sender/recipient with keyword parsing."""
-    import requests as _req
+    """Send a single label image to Azure OpenAI; return extracted dict."""
+    from openai import AzureOpenAI as _AzureOpenAI, RateLimitError, AuthenticationError, APIError
 
-    endpoint = os.environ.get("AZURE_VISION_ENDPOINT", "").rstrip("/")
-    key = os.environ.get("AZURE_VISION_KEY", "")
-    if not endpoint or not key:
-        raise ValueError(
-            "Ustaw AZURE_VISION_ENDPOINT i AZURE_VISION_KEY w konfiguracji Azure App Service. "
-            "Utwórz zasób 'Computer Vision' w Azure Portal i skopiuj endpoint + klucz."
+    api_key = os.environ.get("AZURE_OPENAI_KEY", "")
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+
+    if not api_key:
+        raise ValueError("AZURE_OPENAI_KEY nie jest ustawiony w konfiguracji Azure App Service.")
+
+    az_client = _AzureOpenAI(
+        api_version="2024-12-01-preview",
+        azure_endpoint=endpoint,
+        api_key=api_key,
+    )
+    img_b64 = base64.standard_b64encode(img_data).decode("utf-8")
+
+    try:
+        msg = az_client.chat.completions.create(
+            model=deployment,
+            max_tokens=256,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{img_b64}"}},
+                    {"type": "text", "text": (
+                        "Read the package label in the photo. "
+                        "Return JSON with exactly these fields: "
+                        "\"sender\" (sender name or company), "
+                        "\"recipient\" (recipient — the individual person's name, not the company). "
+                        "IMPORTANT: copy text exactly as it appears on the label, including any "
+                        "asterisks or masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess "
+                        "or complete masked parts. If a field cannot be read, use an empty string. "
+                        "Reply with ONLY raw JSON, no markdown, no extra words."
+                    )},
+                ],
+            }],
         )
+    except AuthenticationError:
+        raise ValueError("Błąd autoryzacji Azure OpenAI — sprawdź AZURE_OPENAI_KEY i AZURE_OPENAI_ENDPOINT.")
+    except RateLimitError:
+        raise ValueError(f"Przekroczono limit zapytań Azure OpenAI (429) dla deployment '{deployment}'. Sprawdź limit TPM/RPM w Azure Portal.")
+    except APIError as e:
+        raise ValueError(f"Błąd Azure OpenAI API ({e.status_code}): {e.message}")
 
-    url = f"{endpoint}/computervision/imageanalysis:analyze?api-version=2024-02-01&features=read&language=pl"
-    headers = {"Ocp-Apim-Subscription-Key": key, "Content-Type": media_type}
-
-    resp = _req.post(url, headers=headers, data=img_data, timeout=20)
-    if resp.status_code == 401:
-        raise ValueError("Błąd autoryzacji Azure Vision — sprawdź AZURE_VISION_KEY.")
-    if resp.status_code == 404:
-        raise ValueError("Nieprawidłowy AZURE_VISION_ENDPOINT — sprawdź adres zasobu Computer Vision.")
-    resp.raise_for_status()
-
-    # Collect all text lines from OCR result
-    lines = []
-    for block in resp.json().get("readResult", {}).get("blocks", []):
-        for line in block.get("lines", []):
-            text = line.get("text", "").strip()
-            if text:
-                lines.append(text)
-
-    # Extract sender/recipient by looking for keyword labels or positional heuristics
-    sender = ""
-    recipient = ""
-    SENDER_KW = {"nadawca", "sender", "from", "od", "nadawca:"}
-    RECIPIENT_KW = {"odbiorca", "recipient", "to", "do", "adresat", "odbiorca:"}
-
-    for i, line in enumerate(lines):
-        lower = line.lower().rstrip(":")
-        val_inline = line.split(":", 1)[1].strip() if ":" in line else ""
-        if lower in SENDER_KW:
-            sender = val_inline or (lines[i + 1] if i + 1 < len(lines) else "")
-        elif lower in RECIPIENT_KW:
-            recipient = val_inline or (lines[i + 1] if i + 1 < len(lines) else "")
-
-    # Fallback: if no keywords found, first line = sender, second = recipient
-    if not sender and not recipient and len(lines) >= 2:
-        sender = lines[0]
-        recipient = lines[1]
-
-    return {"sender": sender.strip(), "recipient": recipient.strip()}
+    raw = msg.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+    result = json.loads(raw)
+    if isinstance(result, list):
+        result = result[0] if result else {}
+    return result
 
 
 def _match_masked_name(raw_name, db_names):
