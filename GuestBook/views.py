@@ -2924,13 +2924,13 @@ def _call_ai_single(img_data, media_type):
 
     api_key = os.environ.get("AZURE_OPENAI_KEY", "")
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")  # exact name from Azure OpenAI Studio
 
     if not api_key:
         raise ValueError("AZURE_OPENAI_KEY nie jest ustawiony w konfiguracji Azure App Service.")
 
     az_client = _AzureOpenAI(
-        api_version="2024-12-01-preview",
+        api_version="2025-01-01-preview",
         azure_endpoint=endpoint,
         api_key=api_key,
     )
