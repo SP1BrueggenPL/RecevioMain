@@ -2920,33 +2920,50 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 
 def _call_ai_single(img_data, media_type):
     """Send a single label image to Azure OpenAI; return extracted dict."""
-    from openai import AzureOpenAI as _AzureOpenAI
+    from openai import AzureOpenAI as _AzureOpenAI, RateLimitError, AuthenticationError, APIError
+
+    api_key = os.environ.get("AZURE_OPENAI_KEY", "")
+    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2")
+
+    if not api_key:
+        raise ValueError("AZURE_OPENAI_KEY nie jest ustawiony w konfiguracji Azure App Service.")
+
     az_client = _AzureOpenAI(
         api_version="2024-12-01-preview",
-        azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/"),
-        api_key=os.environ.get("AZURE_OPENAI_KEY", ""),
+        azure_endpoint=endpoint,
+        api_key=api_key,
     )
     img_b64 = base64.standard_b64encode(img_data).decode("utf-8")
-    msg = az_client.chat.completions.create(
-        model=os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2"),
-        max_tokens=256,
-        messages=[{
-            "role": "user",
-            "content": [
-                {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{img_b64}"}},
-                {"type": "text", "text": (
-                    "Read the package label in the photo. "
-                    "Return JSON with exactly these fields: "
-                    "\"sender\" (sender name or company), "
-                    "\"recipient\" (recipient — the individual person's name, not the company). "
-                    "IMPORTANT: copy text exactly as it appears on the label, including any "
-                    "asterisks or masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess "
-                    "or complete masked parts. If a field cannot be read, use an empty string. "
-                    "Reply with ONLY raw JSON, no markdown, no extra words."
-                )},
-            ],
-        }],
-    )
+
+    try:
+        msg = az_client.chat.completions.create(
+            model=deployment,
+            max_tokens=256,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{img_b64}"}},
+                    {"type": "text", "text": (
+                        "Read the package label in the photo. "
+                        "Return JSON with exactly these fields: "
+                        "\"sender\" (sender name or company), "
+                        "\"recipient\" (recipient — the individual person's name, not the company). "
+                        "IMPORTANT: copy text exactly as it appears on the label, including any "
+                        "asterisks or masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess "
+                        "or complete masked parts. If a field cannot be read, use an empty string. "
+                        "Reply with ONLY raw JSON, no markdown, no extra words."
+                    )},
+                ],
+            }],
+        )
+    except AuthenticationError:
+        raise ValueError(f"Błąd uwierzytelnienia Azure OpenAI — sprawdź AZURE_OPENAI_KEY i AZURE_OPENAI_ENDPOINT.")
+    except RateLimitError:
+        raise ValueError("Przekroczono limit zapytań Azure OpenAI (429). Sprawdź limit TPM/RPM dla deployment: " + deployment)
+    except APIError as e:
+        raise ValueError(f"Błąd Azure OpenAI API ({e.status_code}): {e.message}")
+
     raw = msg.choices[0].message.content.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
