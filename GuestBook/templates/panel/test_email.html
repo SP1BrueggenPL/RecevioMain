@@ -19,26 +19,22 @@
       <div class="col-md-8 offset-md-2">
 
         <div class="card shadow-sm mb-4">
-          <div class="card-header"><strong>Aktualna konfiguracja SMTP</strong></div>
+          <div class="card-header"><strong>Konfiguracja Azure Communication Services</strong></div>
           <div class="card-body">
             <table class="table table-sm mb-0">
               <tbody>
-                <tr><td>SMTP_HOST</td><td><code>{{ config.EMAIL_HOST }}</code></td></tr>
-                <tr><td>SMTP_PORT</td><td><code>{{ config.EMAIL_PORT }}</code></td></tr>
-                <tr><td>SMTP_USE_TLS</td><td><code>{{ config.EMAIL_USE_TLS }}</code></td></tr>
-                <tr><td>SMTP_USE_SSL</td><td><code>{{ config.EMAIL_USE_SSL }}</code></td></tr>
-                <tr><td>SMTP_USER</td><td><code>{{ config.EMAIL_HOST_USER }}</code></td></tr>
-                <tr><td>DEFAULT_FROM_EMAIL</td><td><code>{{ config.DEFAULT_FROM_EMAIL }}</code></td></tr>
                 <tr>
-                  <td>SMTP_PASSWORD</td>
+                  <td>ACS_CONNECTION_STRING</td>
                   <td>
-                    {% if config.has_password %}
-                      <span class="badge bg-success">ustawione</span>
+                    {% if config.ACS_CONFIGURED %}
+                      <span class="badge bg-success">ustawiony</span>
                     {% else %}
-                      <span class="badge bg-danger">NIE ustawione</span>
+                      <span class="badge bg-danger">NIE ustawiony</span>
                     {% endif %}
                   </td>
                 </tr>
+                <tr><td>ACS_SENDER_ADDRESS</td><td><code>{{ config.ACS_SENDER }}</code></td></tr>
+                <tr><td>MAIL_WHITELIST_DOMAIN</td><td><code>{{ config.WHITELIST }}</code></td></tr>
               </tbody>
             </table>
           </div>

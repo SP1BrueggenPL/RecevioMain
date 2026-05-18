@@ -1030,10 +1030,9 @@ logger = logging.getLogger(__name__)
 # def send_sms_with_timeout(number: str, message: str, timeout: int = 5) -> str:  # SMS disabled
 #     ...replaced by send_email_with_timeout...
 
-def send_email_with_timeout(email: str, subject: str, message: str, timeout: int = 5) -> str:
-    """Send email with timeout. Returns 'sent' | 'error' | 'timeout' | 'skipped'."""
-    from django.core.mail import send_mail
-    from django.conf import settings as _s
+def send_email_with_timeout(email: str, subject: str, message: str, timeout: int = 10) -> str:
+    """Send email via ACS (or SMTP fallback). Returns 'sent' | 'error' | 'timeout' | 'skipped'."""
+    from GuestBook.mail_service import send_via_acs
 
     if not email:
         return 'skipped'
@@ -1041,12 +1040,7 @@ def send_email_with_timeout(email: str, subject: str, message: str, timeout: int
     result = {'status': 'timeout'}
 
     def _worker():
-        try:
-            send_mail(subject, message, _s.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
-            result['status'] = 'sent'
-        except Exception as e:
-            logger.exception('[EMAIL ERROR] %s', e)
-            result['status'] = 'error'
+        result['status'] = send_via_acs(email, subject, message)
 
     t = threading.Thread(target=_worker, daemon=True)
     t.start()
@@ -2924,13 +2918,13 @@ def _call_ai_single(img_data, media_type):
 
     api_key = os.environ.get("AZURE_OPENAI_KEY", "")
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "https://brueggen-ti.openai.azure.com/")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-2")
+    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT", "gpt-4o-mini")  # exact name from Azure OpenAI Studio
 
     if not api_key:
         raise ValueError("AZURE_OPENAI_KEY nie jest ustawiony w konfiguracji Azure App Service.")
 
     az_client = _AzureOpenAI(
-        api_version="2024-12-01-preview",
+        api_version="2025-01-01-preview",
         azure_endpoint=endpoint,
         api_key=api_key,
     )
@@ -2958,9 +2952,9 @@ def _call_ai_single(img_data, media_type):
             }],
         )
     except AuthenticationError:
-        raise ValueError(f"Błąd uwierzytelnienia Azure OpenAI — sprawdź AZURE_OPENAI_KEY i AZURE_OPENAI_ENDPOINT.")
+        raise ValueError("Błąd autoryzacji Azure OpenAI — sprawdź AZURE_OPENAI_KEY i AZURE_OPENAI_ENDPOINT.")
     except RateLimitError:
-        raise ValueError("Przekroczono limit zapytań Azure OpenAI (429). Sprawdź limit TPM/RPM dla deployment: " + deployment)
+        raise ValueError(f"Przekroczono limit zapytań Azure OpenAI (429) dla deployment '{deployment}'. Sprawdź limit TPM/RPM w Azure Portal.")
     except APIError as e:
         raise ValueError(f"Błąd Azure OpenAI API ({e.status_code}): {e.message}")
 
@@ -3474,17 +3468,12 @@ def kiosk_settings_save(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.groups.filter(name="Recevio_Helpdesk").exists())
 def test_email_view(request):
-    from django.core.mail import send_mail
-    from django.conf import settings as django_settings
+    from GuestBook.mail_service import _mail_service
 
     config = {
-        'EMAIL_HOST': getattr(django_settings, 'EMAIL_HOST', '—'),
-        'EMAIL_PORT': getattr(django_settings, 'EMAIL_PORT', '—'),
-        'EMAIL_USE_TLS': getattr(django_settings, 'EMAIL_USE_TLS', False),
-        'EMAIL_USE_SSL': getattr(django_settings, 'EMAIL_USE_SSL', False),
-        'EMAIL_HOST_USER': getattr(django_settings, 'EMAIL_HOST_USER', '—') or '(nie ustawiony)',
-        'DEFAULT_FROM_EMAIL': getattr(django_settings, 'DEFAULT_FROM_EMAIL', '—'),
-        'has_password': bool(getattr(django_settings, 'EMAIL_HOST_PASSWORD', '')),
+        'ACS_SENDER': os.environ.get('ACS_SENDER_ADDRESS', '(nie ustawiony)'),
+        'ACS_CONFIGURED': _mail_service._available(),
+        'WHITELIST': os.environ.get('MAIL_WHITELIST_DOMAIN', '(brak)'),
     }
 
     result = None
@@ -3492,12 +3481,11 @@ def test_email_view(request):
         recipient = request.POST.get('recipient', '').strip()
         if recipient:
             try:
-                send_mail(
+                _mail_service.send(
+                    recipients=[recipient],
                     subject='[Recevio] Test wiadomości e-mail',
-                    message='To jest testowa wiadomość wysłana z systemu Recevio.\n\nJeśli ją otrzymałeś — konfiguracja SMTP działa poprawnie.',
-                    from_email=django_settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[recipient],
-                    fail_silently=False,
+                    body='To jest testowa wiadomość wysłana z systemu Recevio.\n\nJeśli ją otrzymałeś — konfiguracja ACS działa poprawnie.',
+                    app_user=request.user.username,
                 )
                 result = ('success', f'Wiadomość wysłana do: {recipient}')
             except Exception as e:
