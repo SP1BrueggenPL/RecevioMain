@@ -41,7 +41,7 @@ class Visitor(models.Model):
 
     visit_purpose = models.TextField(null=False)
     host = models.ForeignKey(Host, on_delete=models.SET_NULL, null=True, blank=True)
-    visitor_id = models.CharField(max_length=3, validators=[RegexValidator(r'^\d{1,3}$', 'ID musi mieć 1–3 cyfry.')], null=False)
+    visitor_id = models.CharField(max_length=20, validators=[RegexValidator(r'^\d{1,20}$', 'ID musi składać się z cyfr.')], null=False)
     production_area = models.BooleanField()
     with_supervision = models.BooleanField(default=True, blank=True)
     safety_acknowledged = models.BooleanField(default=False)
