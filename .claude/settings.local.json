@@ -7,7 +7,12 @@
       "Bash(git push *)",
       "Bash(git commit -m 'Fix SyntaxError: replace smart quotes in docstring with straight quotes *)",
       "Bash(git commit -m 'Fix SyntaxError: remove all smart/curly quotes from Python files *)",
-      "Bash(git commit -m 'Make Azure deployment name configurable via AZURE_OPENAI_DEPLOYMENT env var *)"
+      "Bash(git commit -m 'Make Azure deployment name configurable via AZURE_OPENAI_DEPLOYMENT env var *)",
+      "Bash(sed -n '267,330' /home/user/RecevioMain/GuestBook/forms.py)",
+      "Bash(python3 -c ' *)",
+      "Bash(pip3 show *)",
+      "Bash(unzip -p przyklad_import_odbiorcy.xlsx xl/sharedStrings.xml)",
+      "Bash(unzip -p przyklad_import_odbiorcy.xlsx xl/worksheets/sheet1.xml)"
     ]
   }
 }
