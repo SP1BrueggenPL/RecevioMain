@@ -101,6 +101,10 @@
             <label class="form-label">Or type a name (if not on the list)</label>
             <input type="text" name="collected_by_other" class="form-control">
           </div>
+          <div class="mb-3">
+            <label class="form-label">Picked up at</label>
+            <input type="datetime-local" name="issued_at" class="form-control" id="pickupIssuedAt">
+          </div>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -110,4 +114,18 @@
     </div>
   </div>
 </div>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const modal = document.getElementById('pickupModal');
+    const issuedAt = document.getElementById('pickupIssuedAt');
+    if (modal && issuedAt) {
+      modal.addEventListener('show.bs.modal', function () {
+        if (!issuedAt.value) {
+          const now = new Date(Date.now() - new Date().getTimezoneOffset() * 60000);
+          issuedAt.value = now.toISOString().slice(0, 16);
+        }
+      });
+    }
+  });
+</script>
 {% endblock %}
