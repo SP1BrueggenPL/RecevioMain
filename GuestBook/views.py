@@ -3506,7 +3506,17 @@ def boxflow_pack_detail(request, pk):
         if not collected_by and not collected_by_other:
             messages.error(request, "Please provide the name of the recipient")
             return redirect("boxflow_detail", pk=pkg.pk)
-        who = _mark_package_issued(pkg, collected_by, collected_by_other, request.user)
+
+        issued_at = None
+        raw_issued_at = request.POST.get("issued_at")
+        if raw_issued_at:
+            try:
+                parsed = datetime.strptime(raw_issued_at, "%Y-%m-%dT%H:%M")
+                issued_at = timezone.make_aware(parsed) if timezone.is_naive(parsed) else parsed
+            except ValueError:
+                issued_at = None
+
+        who = _mark_package_issued(pkg, collected_by, collected_by_other, request.user, issued_at=issued_at)
         messages.success(request, f"Package {pkg.code} has been delivered. Recipient: {who}.")
         return redirect("boxflow_detail", pk=pkg.pk)
 
