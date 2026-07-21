@@ -24,9 +24,16 @@
   }
   .info {
     font-size: 9pt;
-    line-height: 1.35;
+    line-height: 1.2;
   }
-  .info div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .info div { overflow: hidden; }
+  .info div.sender {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .info div.recipient { white-space: nowrap; text-overflow: ellipsis; }
   .barcode-wrap {
     text-align: center;
     line-height: 1;
@@ -35,10 +42,10 @@
 </style>
 </head>
 <body>
-  <div class="code">{{ pkg.code }}</div>
+  <div class="code">{{ pkg.label_code|default:pkg.code }}</div>
   <div class="info">
-    <div><strong>Nadawca:</strong> {{ pkg.sender }}</div>
-    <div><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
+    <div class="sender"><strong>Nadawca:</strong> {{ pkg.sender }}</div>
+    <div class="recipient"><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
   </div>
   <div class="barcode-wrap">
     <svg id="barcode"></svg>

@@ -546,7 +546,7 @@ a:hover {
 .navbar-default.navbar-trans .nav-item,
 .navbar-default.navbar-reduce .nav-item {
   position: relative;
-  padding-right: 10px;
+  padding-right: 29px;
   padding-bottom: 8px;
   margin-left: 0;
 }
@@ -685,7 +685,7 @@ a:hover {
   color: #FF4143;
 }
 
-.navbar-default .dropdown:hover .dropdown-menu {
+.navbar-default .dropdown-menu.show {
   -webkit-transform: translate3d(0px, 0px, 0px);
   transform: translate3d(0px, 0px, 0px);
   visibility: visible;
@@ -1722,7 +1722,6 @@ footer .credits {
   .navbar-default .dropdown .dropdown-menu {
     border-top: 4px solid #FF4143;
     border-left: 0;
-    display: block;
     position: absolute;
     box-shadow: 0 2px rgba(17, 16, 15, 0.1), 0 2px 10px rgba(20, 19, 18, 0.1);
   }

@@ -6,7 +6,7 @@
   <form method="post" enctype="multipart/form-data" class="card p-3">
     {% csrf_token %}
     <input type="file" name="file" class="form-control" accept=".csv,.xls,.xlsx" required>
-    <p class="form-text mt-2">Kolumny: dla nadawców: <em>name</em>; dla odbiorców: <em>name, email </em>.</p>
+    <p class="form-text mt-2">Kolumny: dla nadawców: <em>name</em>; dla odbiorców: <em>name, email (opcjonalnie), phone (opcjonalnie)</em>.</p>
     <div class="mt-2">
       <button class="btn btn-primary">Save</button>
     </div>

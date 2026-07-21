@@ -1,6 +1,7 @@
 {% extends 'base_panel.html' %}
 {% load static %}
 {% block content %}
+<link href="{% static 'css/select2.min.css' %}" rel="stylesheet">
 <br>
 <br>
 <section class="intro-single py-4">
@@ -9,7 +10,7 @@
 
     {% if messages %}
       {% for msg in messages %}
-        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mx-auto mb-3" style="max-width: 560px;" role="alert">
+        <div class="alert alert-{{ msg.tags }} alert-dismissible fade show mx-auto mb-3" style="max-width: 900px;" role="alert">
           {{ msg }}
           <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
@@ -17,7 +18,7 @@
     {% endif %}
 
     {% if from_scan %}
-      <div class="alert alert-info mx-auto mb-3" style="max-width: 560px;">
+      <div class="alert alert-info mx-auto mb-3" style="max-width: 900px;">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-stars me-1" viewBox="0 0 16 16">
           <path d="M7.657 6.247c.11-.33.576-.33.686 0l.645 1.937a2.89 2.89 0 0 0 1.829 1.828l1.936.645c.33.11.33.576 0 .686l-1.937.645a2.89 2.89 0 0 0-1.828 1.829l-.645 1.936a.361.361 0 0 1-.686 0l-.645-1.937a2.89 2.89 0 0 0-1.828-1.828l-1.937-.645a.361.361 0 0 1 0-.686l1.937-.645a2.89 2.89 0 0 0 1.828-1.828zM3.794 1.148a.217.217 0 0 1 .412 0l.387 1.162c.173.518.579.924 1.097 1.097l1.162.387a.217.217 0 0 1 0 .412l-1.162.387A1.73 1.73 0 0 0 4.593 5.69l-.387 1.162a.217.217 0 0 1-.412 0L3.407 5.69A1.73 1.73 0 0 0 2.31 4.593l-1.162-.387a.217.217 0 0 1 0-.412l1.162-.387A1.73 1.73 0 0 0 3.407 2.31zM10.863.099a.145.145 0 0 1 .274 0l.258.774c.115.346.386.617.732.732l.774.258a.145.145 0 0 1 0 .274l-.774.258a1.16 1.16 0 0 0-.732.732l-.258.774a.145.145 0 0 1-.274 0l-.258-.774a1.16 1.16 0 0 0-.732-.732L9.1 2.137a.145.145 0 0 1 0-.274l.774-.258c.346-.115.617-.386.732-.732z"/>
         </svg>
@@ -25,45 +26,69 @@
       </div>
     {% endif %}
 
-    <form method="post" action="{% url 'boxflow_add_confirm' %}" class="card shadow-sm mx-auto" style="max-width: 560px; width: 100%;">
+    <form method="post" action="{% url 'boxflow_add_confirm' %}" class="card shadow-sm mx-auto" style="max-width: 900px; width: 100%;">
       {% csrf_token %}
+      <input type="hidden" name="prefill_photo_name" value="{{ prefill_photo_name }}">
+      <input type="hidden" name="prefill_phone" value="{{ prefill_phone }}">
       <div class="card-body">
-        <div class="mx-auto" style="max-width: 420px;">
+        <div class="row g-4">
+          <div class="{% if prefill_photo_url %}col-md-7{% else %}col-12{% endif %} mx-auto">
+            <div class="mx-auto" style="max-width: 420px;">
 
-          <div class="mb-3">
-            <label class="form-label">Delivery date</label>
-            {{ form.delivered_at }}
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">Sender <span class="text-muted small">(from list)</span></label>
-            {{ form.sender }}
-          </div>
-
-          <div class="mb-3">
-            <label class="form-label">
-              New sender
-              <span class="text-muted small">– type here if not in the list above</span>
-            </label>
-            {{ form.new_sender }}
-            {% if ai_sender_name %}
-              <div class="form-text text-info">
-                AI read: <strong>{{ ai_sender_name }}</strong> — not found in the list.
-                A new sender will be created automatically on save.
+              <div class="mb-3">
+                <label class="form-label">Delivery date</label>
+                {{ form.delivered_at }}
               </div>
-            {% endif %}
-          </div>
 
-          <div class="mb-3">
-            <label class="form-label">Recipient</label>
-            {{ form.recipient }}
-            {% if ai_recipient_name %}
-              <div class="form-text text-warning">
-                AI read: <strong>{{ ai_recipient_name }}</strong> — not found in the list. Please select manually.
+              <div class="mb-3">
+                <label class="form-label">Sender <span class="text-muted small">(from list)</span></label>
+                {{ form.sender }}
               </div>
-            {% endif %}
+
+              <div class="mb-3">
+                <label class="form-label">
+                  New sender
+                  <span class="text-muted small">– type here if not in the list above</span>
+                </label>
+                {{ form.new_sender }}
+                {% if ai_sender_name %}
+                  <div class="form-text text-info">
+                    AI read: <strong>{{ ai_sender_name }}</strong> — not found in the list.
+                    A new sender will be created automatically on save.
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Recipient</label>
+                {{ form.recipient }}
+                {% if ai_recipient_name %}
+                  <div class="form-text text-warning">
+                    AI read: <strong>{{ ai_recipient_name }}</strong> — not found in the list.
+                    Defaulted to "BRAK ODBIORCY" — please select the correct recipient manually.
+                  </div>
+                {% endif %}
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Package number <span class="text-muted small">(from label, optional)</span></label>
+                {{ form.label_code }}
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label">Reception comment <span class="text-muted small">(optional)</span></label>
+                {{ form.staff_comment }}
+              </div>
+
+            </div>
           </div>
 
+          {% if prefill_photo_url %}
+          <div class="col-md-5">
+            <label class="form-label d-block text-center">Scanned label</label>
+            <img src="{{ prefill_photo_url }}" alt="Label photo" class="img-fluid rounded border mx-auto d-block" style="max-height: 480px; object-fit: contain;">
+          </div>
+          {% endif %}
         </div>
 
         {% if form.non_field_errors %}
@@ -86,6 +111,8 @@
 </section>
 <br>
 <br>
+<script src="{% static 'lib/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'js/vendor/select2/select2.full.min.js' %}"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
     const byId = id => document.getElementById(id);
@@ -93,16 +120,22 @@
     const sender    = byId('id_sender');
     const newSender = byId('id_new_sender');
     const recipient = byId('id_recipient');
+    const labelCode = byId('id_label_code');
+    const comment   = byId('id_staff_comment');
 
     const ensureBsClass = el => {
       if (!el) return;
       el.classList.add(el.tagName === 'SELECT' ? 'form-select' : 'form-control');
     };
-    [delivered, sender, newSender, recipient].forEach(ensureBsClass);
+    [delivered, sender, newSender, recipient, labelCode, comment].forEach(ensureBsClass);
 
     if (sender && newSender) {
       sender.addEventListener('change', () => { if (sender.value) newSender.value = ''; });
       newSender.addEventListener('input', () => { if (newSender.value.trim()) sender.value = ''; });
+    }
+
+    if (window.jQuery) {
+      jQuery('#id_sender, #id_recipient').select2({ width: '100%' });
     }
   });
 </script>

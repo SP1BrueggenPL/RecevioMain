@@ -233,6 +233,7 @@ class Recipient(models.Model):
     """Aktualizuje tylko helpdesk; można dodać pola kontaktowe do maila."""
     name = models.CharField(max_length=150, unique=True)
     email = models.EmailField(blank=True, null=True)
+    phone = models.CharField(max_length=32, blank=True, default="", db_index=True)
 
     class Meta:
         ordering = ["name"]
@@ -267,7 +268,12 @@ class Package(models.Model):
     recipient = models.ForeignKey(Recipient, on_delete=models.PROTECT, related_name="packages")
 
     code = models.CharField("Code", max_length=32, unique=True, db_index=True)
+    label_code = models.CharField("Package number (from label)", max_length=64, blank=True, default="")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.IN_BOX)
+
+    staff_comment = models.TextField("Reception comment", blank=True, default="")
+    label_photo = models.ImageField(upload_to="package_labels/", null=True, blank=True)
+    reminder_sent_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True,

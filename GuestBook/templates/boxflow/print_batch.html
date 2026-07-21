@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<style>
+  @page { size: 65mm 40mm; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; }
+  .label {
+    width: 65mm;
+    height: 40mm;
+    padding: 1.5mm 3mm 1mm 3mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    overflow: hidden;
+    page-break-after: always;
+  }
+  .label:last-child { page-break-after: auto; }
+  .code {
+    font-size: 12pt;
+    font-weight: 900;
+    text-align: center;
+    letter-spacing: 1px;
+    line-height: 1;
+  }
+  .info {
+    font-size: 9pt;
+    line-height: 1.2;
+  }
+  .info div { overflow: hidden; }
+  .info div.sender {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+  .info div.recipient { white-space: nowrap; text-overflow: ellipsis; }
+  .barcode-wrap {
+    text-align: center;
+    line-height: 1;
+  }
+  .barcode-wrap svg { display: block; margin: 0 auto; }
+</style>
+</head>
+<body>
+  {% for pkg in packages %}
+  <div class="label">
+    <div class="code">{{ pkg.label_code|default:pkg.code }}</div>
+    <div class="info">
+      <div class="sender"><strong>Nadawca:</strong> {{ pkg.sender }}</div>
+      <div class="recipient"><strong>Odbiorca:</strong> {{ pkg.recipient }}</div>
+    </div>
+    <div class="barcode-wrap">
+      <svg class="barcode" data-code="{{ pkg.code }}"></svg>
+    </div>
+  </div>
+  {% endfor %}
+
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script>
+  var barcodes = document.querySelectorAll('.barcode');
+  var rendered = 0;
+  barcodes.forEach(function (el) {
+    JsBarcode(el, el.getAttribute('data-code'), {
+      format: "CODE128",
+      width: 1.2,
+      height: 38,
+      displayValue: true,
+      fontSize: 8,
+      margin: 0,
+      textMargin: 1,
+      valid: function () {
+        rendered += 1;
+        if (rendered === barcodes.length) {
+          window.print();
+          window.addEventListener('afterprint', function () {
+            window.location.href = "{% url 'boxflow_list' %}";
+          });
+        }
+      }
+    });
+  });
+</script>
+</body>
+</html>

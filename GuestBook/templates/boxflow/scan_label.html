@@ -101,6 +101,7 @@
 
       <div class="card-footer d-flex justify-content-center gap-2">
         <a href="{% url 'boxflow_list' %}" class="btn btn-secondary">List</a>
+        <a href="{% url 'boxflow_add_confirm' %}" class="btn btn-outline-secondary">Add manually</a>
       </div>
     </div>
   </div>
@@ -162,20 +163,64 @@
   const analyzeBtnMulti = document.getElementById('analyzeBtnMulti');
   const multiSpinner  = document.getElementById('multiLoadingSpinner');
 
-  multiInput.addEventListener('change', () => {
+  // Persistent list of picked files: re-opening the file picker replaces
+  // input.files with only the newly-selected photos, so we accumulate into
+  // this array ourselves and rebuild input.files from it before submit.
+  let selectedFiles = [];
+
+  function fileKey(f) {
+    return `${f.name}_${f.size}_${f.lastModified}`;
+  }
+
+  function rebuildInputFiles() {
+    const dt = new DataTransfer();
+    selectedFiles.forEach(f => dt.items.add(f));
+    multiInput.files = dt.files;
+  }
+
+  function renderMultiPreviews() {
     multiPreviews.innerHTML = '';
-    Array.from(multiInput.files).forEach(file => {
+    selectedFiles.forEach((file, idx) => {
+      const wrap = document.createElement('div');
+      wrap.className = 'position-relative';
+
       const reader = new FileReader();
       reader.onload = e => {
         const img = document.createElement('img');
         img.src = e.target.result;
         img.className = 'rounded border';
         img.style.cssText = 'height:80px;width:80px;object-fit:cover;';
-        multiPreviews.appendChild(img);
+        wrap.appendChild(img);
       };
       reader.readAsDataURL(file);
+
+      const removeBtn = document.createElement('button');
+      removeBtn.type = 'button';
+      removeBtn.className = 'btn btn-sm btn-danger position-absolute top-0 end-0 p-0';
+      removeBtn.style.cssText = 'width:20px;height:20px;line-height:1;transform:translate(30%,-30%);border-radius:50%;';
+      removeBtn.textContent = '×';
+      removeBtn.addEventListener('click', () => {
+        selectedFiles.splice(idx, 1);
+        rebuildInputFiles();
+        renderMultiPreviews();
+      });
+      wrap.appendChild(removeBtn);
+
+      multiPreviews.appendChild(wrap);
     });
-    analyzeBtnMulti.disabled = multiInput.files.length === 0;
+    analyzeBtnMulti.disabled = selectedFiles.length === 0;
+  }
+
+  multiInput.addEventListener('change', () => {
+    const existingKeys = new Set(selectedFiles.map(fileKey));
+    Array.from(multiInput.files).forEach(file => {
+      if (!existingKeys.has(fileKey(file))) {
+        selectedFiles.push(file);
+        existingKeys.add(fileKey(file));
+      }
+    });
+    rebuildInputFiles();
+    renderMultiPreviews();
   });
 
   document.getElementById('scanFormMulti').addEventListener('submit', () => {
