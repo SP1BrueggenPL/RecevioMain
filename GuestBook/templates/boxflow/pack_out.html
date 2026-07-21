@@ -1,6 +1,7 @@
 {% extends 'base_panel.html' %}
 {% load static %}
 {% block content %}
+<link href="{% static 'css/select2.min.css' %}" rel="stylesheet">
   <br>
   <br>
   <section class="intro-single py-4 d-flex align-items-start justify-content-center">
@@ -9,6 +10,9 @@
   <div class="card shadow-sm p-4" style="max-width: 560px; width: 100%;">
     <h1 class="h3 text-center mb-1">PackOut</h1>
     <p class="text-muted text-center mb-4">Scan the label, select the recipient, and confirm.</p>
+    <p class="text-center mb-3">
+      <a href="{% url 'boxflow_out_multi' %}">Picking up several packages at once?</a>
+    </p>
 
     <form method="post" id="packout-form" autocomplete="off" target="_self">
       {% csrf_token %}
@@ -103,5 +107,14 @@
   }
   {% endif %}
 })();
+</script>
+<script src="{% static 'lib/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'js/vendor/select2/select2.full.min.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.jQuery) {
+      jQuery('#id_collected_by').select2({ width: '100%' });
+    }
+  });
 </script>
 {% endblock %}

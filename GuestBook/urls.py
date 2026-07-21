@@ -93,10 +93,12 @@ urlpatterns = [
 
     path("boxflow/add/", views.boxflow_scan_label, name="boxflow_add"),
     path("boxflow/add/confirm/", views.boxflow_add_pack, name="boxflow_add_confirm"),
+    path("boxflow/print/batch/", views.boxflow_print_batch, name="boxflow_print_batch"),
     path("boxflow/list/", views.boxflow_pack_list, name="boxflow_list"),
     path('boxflow/<int:pk>/delete/', views.boxflow_delete_pack, name='boxflow_delete'),
     path("boxflow/inbox/", views.boxflow_inbox_status, name="boxflow_inbox"),
     path("boxflow/out/", views.boxflow_pack_out, name="boxflow_out"),
+    path("boxflow/out/multi/", views.boxflow_pack_out_multi, name="boxflow_out_multi"),
     path("boxflow/<int:pk>/", views.boxflow_pack_detail, name="boxflow_detail"),
     path("boxflow/<int:pk>/reprint/", views.boxflow_reprint_label, name="boxflow_reprint"),
 

@@ -1,7 +1,13 @@
 from background_task import background
 from django.utils import timezone
 from datetime import timedelta
+from django.core.management import call_command
 from .models import Visitor
+
+@background(schedule=120)
+def remind_unpicked_packages_task():
+    call_command("remind_unpicked_packages")
+
 
 @background(schedule=60)
 def close_expired_visitors_task():

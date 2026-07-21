@@ -12,7 +12,7 @@ import openpyxl
 from django.http import FileResponse
 from .utils import generate_bhp_pdf
 from django.contrib.auth.decorators import user_passes_test
-from .task import close_expired_visitors_task
+from .task import close_expired_visitors_task, remind_unpicked_packages_task
 from django.contrib import auth
 from .forms import UserLoginForm
 from .utils import clean_next_url
@@ -208,6 +208,11 @@ try:
 except Exception:
     pass  # DB not yet migrated (e.g. first deploy); background_task table created on migrate
 
+try:
+    remind_unpicked_packages_task(repeat=3600)
+except Exception:
+    pass  # DB not yet migrated (e.g. first deploy); background_task table created on migrate
+
 def is_reception(user):
     return user.groups.filter(name="Reception").exists()
 
@@ -264,6 +269,12 @@ def login(request):
 
         if user:
             auth.login(request, user)
+
+            if request.POST.get('remember_me'):
+                request.session.set_expiry(None)  # persist for SESSION_COOKIE_AGE (2 weeks)
+            else:
+                request.session.set_expiry(0)  # expire when the browser closes
+
             next_url = clean_next_url(request.POST.get('next', ''))
 
             if user.is_superuser:
@@ -2912,6 +2923,30 @@ helpdesk_required = user_passes_test(_can_helpdesk)
 
 # --- AI Label Scan ---
 
+def _save_rotated_label_photo(img_data, original_name):
+    """Force the label photo to portrait orientation and persist it; returns the storage name."""
+    from PIL import Image, ImageOps
+    import io as _io
+
+    try:
+        image = Image.open(_io.BytesIO(img_data))
+        image = ImageOps.exif_transpose(image)
+        if image.width > image.height:
+            image = image.rotate(90, expand=True)
+        buf = _io.BytesIO()
+        fmt = (image.format or "JPEG")
+        if image.mode in ("RGBA", "P") and fmt.upper() == "JPEG":
+            image = image.convert("RGB")
+        image.save(buf, format=fmt)
+        buf.seek(0)
+        data = buf.getvalue()
+    except Exception:
+        data = img_data  # fall back to the original bytes if Pillow can't process it
+
+    safe_name = os.path.basename(original_name or "label.jpg")
+    return default_storage.save(f"package_labels/{safe_name}", ContentFile(data))
+
+
 def _call_ai_single(img_data, media_type):
     """Send a single label image to Azure OpenAI; return extracted dict."""
     from openai import AzureOpenAI as _AzureOpenAI, RateLimitError, AuthenticationError, APIError
@@ -2939,13 +2974,29 @@ def _call_ai_single(img_data, media_type):
                 "content": [
                     {"type": "image_url", "image_url": {"url": f"data:{media_type};base64,{img_b64}"}},
                     {"type": "text", "text": (
-                        "Read the package label in the photo. "
-                        "Return JSON with exactly these fields: "
-                        "\"sender\" (sender name or company), "
-                        "\"recipient\" (recipient — the individual person's name, not the company). "
-                        "IMPORTANT: copy text exactly as it appears on the label, including any "
-                        "asterisks or masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess "
-                        "or complete masked parts. If a field cannot be read, use an empty string. "
+                        "Read the shipping label in the photo. It may be a generic label or a "
+                        "carrier-specific one (FedEx, UPS, DHL, InPost, GLS, etc.) — each carrier "
+                        "places sender/recipient/tracking blocks in different positions, so check the "
+                        "whole label, not just one layout. Some text on the label may be printed "
+                        "sideways or upside down (rotated 90/180/270 degrees relative to the main "
+                        "block) — read that rotated text too, don't only read upright horizontal lines.\n\n"
+                        "Return JSON with exactly these fields:\n"
+                        "\"sender\" (sender name or company),\n"
+                        "\"recipient\" (recipient — the individual person's name, not the company),\n"
+                        "\"phone\" (a phone number printed on the label, for either sender or recipient, if any),\n"
+                        "\"package_number\" (the carrier/tracking number printed on the label, if any),\n"
+                        "\"carrier\" (one of \"fedex\", \"ups\", \"dhl\", \"inpost\", \"gls\", \"other\", or \"\" if not identifiable — "
+                        "FedEx labels show the FedEx wordmark/logo; UPS tracking numbers start with '1Z').\n\n"
+                        "IMPORTANT rules:\n"
+                        "- Copy text exactly as it appears on the label, including any asterisks or "
+                        "masked characters (e.g. 'RAF*** ZAW***'). Do NOT try to guess or complete masked parts.\n"
+                        "- Company/legal-entity suffixes such as 'S.A.', 'Sp. z o.o.', 'Spółka Akcyjna', "
+                        "'Spółka z ograniczoną odpowiedzialnością' are just different ways of writing the "
+                        "same legal form — they do NOT make it a different company. Copy the sender name "
+                        "as printed, but do not treat two spellings of the same suffix as different senders.\n"
+                        "- If you are not confident about a field's value, return an empty string for it. "
+                        "Never guess, invent, or fill in a value you are not reasonably sure is correct — "
+                        "an empty string is always better than a wrong guess.\n"
                         "Reply with ONLY raw JSON, no markdown, no extra words."
                     )},
                 ],
@@ -2982,8 +3033,25 @@ def _match_masked_name(raw_name, db_names):
     import difflib as _difflib
     import unicodedata as _ud
 
+    # Legal-entity suffixes that don't distinguish one company from another
+    # (e.g. "AB S.A." and "AB Spółka Akcyjna" are the same sender). Matched against
+    # the upper-cased text BEFORE ascii-folding, since Polish "Ł"/"Ą" etc. have no
+    # NFKD decomposition and would otherwise just vanish under encode(...,"ignore"),
+    # breaking a literal match against these patterns.
+    _LEGAL_SUFFIXES = [
+        r"S\.?\s*A\.?",
+        r"SPÓŁKA\s+AKCYJNA",
+        r"SP\.?\s*Z\s*O\.?\s*O\.?",
+        r"SPÓŁKA\s+Z\s+OGRANICZONĄ\s+ODPOWIEDZIALNOŚCIĄ",
+    ]
+
     def _norm(s):
-        return _ud.normalize("NFKD", s).encode("ascii", "ignore").decode().upper().strip()
+        s = s.upper().strip()
+        for pattern in _LEGAL_SUFFIXES:
+            s = _re.sub(r"\b" + pattern + r"\b", "", s)
+        s = _re.sub(r"[.,]", "", s)
+        s = _ud.normalize("NFKD", s).encode("ascii", "ignore").decode()
+        return _re.sub(r"\s+", " ", s).strip()
 
     if not raw_name:
         return None
@@ -2995,12 +3063,13 @@ def _match_masked_name(raw_name, db_names):
 
     norm_db = {_norm(n): n for n in db_names}
 
-    # 1. Exact (normalized)
+    # 1. Exact (normalized, legal-suffix-insensitive)
     if norm_stripped in norm_db:
         return norm_db[norm_stripped]
 
-    # 2. Standard fuzzy on stripped name
-    close = _difflib.get_close_matches(norm_stripped, norm_db.keys(), n=1, cutoff=0.55)
+    # 2. Standard fuzzy on stripped name — cutoff raised so low-confidence
+    #    guesses are rejected (an empty/manual result is safer than a wrong one).
+    close = _difflib.get_close_matches(norm_stripped, norm_db.keys(), n=1, cutoff=0.75)
     if close:
         return norm_db[close[0]]
 
@@ -3041,11 +3110,17 @@ def boxflow_scan_label(request):
         queue = []
         errors = []
         for f in files:
+            raw = f.read()
+            photo_name = _save_rotated_label_photo(raw, f.name)
             try:
-                result = _call_ai_single(f.read(), f.content_type or "image/jpeg")
+                result = _call_ai_single(raw, f.content_type or "image/jpeg")
                 queue.append({
                     "sender": (result.get("sender") or "").strip(),
                     "recipient": (result.get("recipient") or "").strip(),
+                    "phone": (result.get("phone") or "").strip(),
+                    "package_number": (result.get("package_number") or "").strip(),
+                    "carrier": (result.get("carrier") or "").strip(),
+                    "photo": photo_name,
                 })
             except Exception as e:
                 errors.append(str(e))
@@ -3088,6 +3163,12 @@ def boxflow_add_pack(request):
                 pkg.created_by = request.user
             pkg.code = code
             pkg.status = Package.Status.IN_BOX
+            photo_name = request.POST.get("prefill_photo_name") or ""
+            if photo_name:
+                pkg.label_photo.name = photo_name
+            phone_number = request.POST.get("prefill_phone") or ""
+            if phone_number:
+                pkg.phone_number = phone_number
             pkg.save()
             form.save_m2m()
 
@@ -3102,7 +3183,12 @@ def boxflow_add_pack(request):
                     f"Dla odbiorcy: {getattr(pkg.recipient, 'name', '')} zarejestrowano paczkę w paczkomacie.\n"
                     f"Kod: {pkg.code}\n"
                     f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
-                    f"Dostarczono: {pkg.delivered_at:%d.%m.%Y %H:%M}\n\n"
+                    f"Dostarczono: {pkg.delivered_at:%d.%m.%Y %H:%M}\n"
+                )
+                if pkg.staff_comment:
+                    _body += f"Komentarz recepcji: {pkg.staff_comment}\n"
+                _body += (
+                    "\nProsimy o odbiór paczki w ciągu 48h.\n\n"
                 )
                 Thread(
                     target=send_email_with_timeout,
@@ -3111,7 +3197,12 @@ def boxflow_add_pack(request):
                     daemon=True,
                 ).start()
 
-            # 5) If there are more packages in the batch queue, advance to the next one
+            # 5) Track every package saved in this batch so they can all be printed
+            #    in sequence once the whole batch is confirmed (not just the last one).
+            print_queue = request.session.get("print_queue", [])
+            print_queue.append(pkg.pk)
+            request.session["print_queue"] = print_queue
+
             remaining = request.session.pop("pack_prefill_queue", [])
             messages.success(request, f"Package {pkg.code} has been added.")
             if remaining:
@@ -3120,6 +3211,11 @@ def boxflow_add_pack(request):
                     request.session["pack_prefill_queue"] = remaining[1:]
                 messages.info(request, f"{len(remaining)} package(s) remaining in batch.")
                 return redirect("boxflow_add_confirm")
+
+            request.session.pop("print_queue", None)
+            if len(print_queue) > 1:
+                request.session["last_print_batch"] = print_queue
+                return redirect("boxflow_print_batch")
             from django.urls import reverse
             detail_url = reverse("boxflow_detail", args=[pkg.pk])
             print_url = reverse("boxflow_print_label", args=[pkg.pk]) + f"?next={detail_url}"
@@ -3130,8 +3226,16 @@ def boxflow_add_pack(request):
         initial = {}
         ai_sender_name = ""
         ai_recipient_name = ""
+        prefill_photo_url = ""
+        prefill_photo_name = ""
+        prefill_phone = ""
         if prefill:
             initial["delivered_at"] = timezone.now()
+            initial["label_code"] = prefill.get("package_number", "")
+            prefill_phone = prefill.get("phone", "")
+            prefill_photo_name = prefill.get("photo", "")
+            if prefill_photo_name:
+                prefill_photo_url = default_storage.url(prefill_photo_name)
 
             # Try to match sender name to existing Sender (supports masked names like RAF*** ZAW***)
             sender_name = prefill.get("sender", "")
@@ -3147,16 +3251,26 @@ def boxflow_add_pack(request):
                     initial["new_sender"] = _re.sub(r"\*+", "", sender_name).strip()
                     ai_sender_name = sender_name
 
-            # Try to match recipient name to existing Recipient (supports masked names)
+            # Recipient match order: exact phone → normalized/fuzzy name → BRAK ODBIORCY placeholder.
+            from .models import Recipient as _Recipient
+            matched_recipient = None
+            if prefill_phone:
+                matched_recipient = _Recipient.objects.filter(phone=prefill_phone).first()
+
             recipient_name = prefill.get("recipient", "")
-            if recipient_name:
-                from .models import Recipient as _Recipient
+            if not matched_recipient and recipient_name:
                 all_recipients = list(_Recipient.objects.values_list("name", flat=True))
                 matched_r_name = _match_masked_name(recipient_name, all_recipients)
                 if matched_r_name:
-                    initial["recipient"] = _Recipient.objects.get(name=matched_r_name)
-                else:
-                    ai_recipient_name = recipient_name
+                    matched_recipient = _Recipient.objects.get(name=matched_r_name)
+
+            if matched_recipient:
+                initial["recipient"] = matched_recipient
+            elif recipient_name:
+                ai_recipient_name = recipient_name
+                initial["recipient"] = _Recipient.objects.filter(name="BRAK ODBIORCY").first()
+            else:
+                initial["recipient"] = _Recipient.objects.filter(name="BRAK ODBIORCY").first()
 
         form = PackageForm(initial=initial)
 
@@ -3165,7 +3279,22 @@ def boxflow_add_pack(request):
         "ai_recipient_name": ai_recipient_name if request.method == "GET" else "",
         "ai_sender_name": ai_sender_name if request.method == "GET" else "",
         "from_scan": prefill is not None,
+        "prefill_photo_url": prefill_photo_url if request.method == "GET" else "",
+        "prefill_photo_name": prefill_photo_name if request.method == "GET" else "",
+        "prefill_phone": prefill_phone if request.method == "GET" else "",
     })
+
+
+@login_required
+@boxflow_required
+def boxflow_print_batch(request):
+    """Print every label added in the most recently confirmed batch, in order."""
+    ids = request.session.pop("last_print_batch", [])
+    packages = list(
+        Package.objects.select_related("sender", "recipient").filter(pk__in=ids)
+    )
+    packages.sort(key=lambda p: ids.index(p.pk))
+    return render(request, "boxflow/print_batch.html", {"packages": packages})
 
 
 
@@ -3174,7 +3303,7 @@ def boxflow_add_pack(request):
 def boxflow_pack_list(request):
     q = (request.GET.get("q") or "").strip()
     qs = (Package.objects
-          .select_related("sender", "recipient")
+          .select_related("sender", "recipient", "collected_by", "issued_by")
           .order_by("-created_at"))
     if q:
         qs = qs.filter(
@@ -3200,6 +3329,75 @@ def boxflow_inbox_status(request):
     ).order_by("-delivered_at")
     return render(request, "boxflow/inbox_status.html", {"packages": qs})
 
+def _mark_package_issued(pkg, collected_by, collected_by_other, user, issued_at=None, notify=True):
+    """Shared pickup logic: marks a package issued and (optionally) fires the confirmation email.
+    Used by PackOut (single + multi scan) and the manual pickup action on the
+    package detail page, so all three paths behave identically.
+    Returns the display name of whoever picked it up.
+    Pass notify=False when the caller will send its own combined e-mail instead
+    (see _send_combined_pickup_email, used by the PackOut multi-scan flow).
+    """
+    issued_at = issued_at or timezone.now()
+    pkg.status = Package.Status.ISSUED
+    pkg.issued_at = issued_at
+    pkg.issued_by = user
+    pkg.collected_by = collected_by if collected_by else None
+    pkg.collected_by_name = "" if collected_by else (collected_by_other or "")
+    pkg.save(update_fields=[
+        "status", "issued_at", "issued_by", "collected_by", "collected_by_name"
+    ])
+
+    who = collected_by.name if collected_by else (collected_by_other or "nieznana osoba")
+
+    if notify and getattr(pkg.recipient, "email", None):
+        _email = pkg.recipient.email
+        _subject = f"Paczka odebrana: {pkg.code}"
+        _body = (
+            f"Cześć,\n\n"
+            f"Twoja paczka {pkg.code} została odebrana z paczkomatu.\n"
+            f"Odebrał(a): {who}\n"
+            f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n"
+            f"Nadawca: {getattr(pkg.sender, 'name', '')}\n\n"
+        )
+        Thread(
+            target=send_email_with_timeout,
+            args=(_email, _subject, _body),
+            kwargs={"timeout": 10},
+            daemon=True,
+        ).start()
+
+    return who
+
+
+def _send_combined_pickup_email(packages, who, issued_at):
+    """One combined e-mail listing every package picked up in the same PackOut session,
+    instead of one e-mail per package (used by the PackOut multi-scan flow)."""
+    by_recipient = {}
+    for pkg in packages:
+        email = getattr(pkg.recipient, "email", None)
+        if email:
+            by_recipient.setdefault(email, []).append(pkg)
+
+    for email, pkgs in by_recipient.items():
+        lines = "\n".join(
+            f"- {p.code} (nadawca: {getattr(p.sender, 'name', '')})" for p in pkgs
+        )
+        subject = f"Paczki odebrane ({len(pkgs)})" if len(pkgs) > 1 else f"Paczka odebrana: {pkgs[0].code}"
+        body = (
+            f"Cześć,\n\n"
+            f"Poniższe paczki zostały odebrane z paczkomatu.\n"
+            f"Odebrał(a): {who}\n"
+            f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n\n"
+            f"{lines}\n\n"
+        )
+        Thread(
+            target=send_email_with_timeout,
+            args=(email, subject, body),
+            kwargs={"timeout": 10},
+            daemon=True,
+        ).start()
+
+
 @login_required
 @boxflow_required
 def boxflow_pack_out(request):
@@ -3222,37 +3420,7 @@ def boxflow_pack_out(request):
         if confirm:
             collected_by = form.cleaned_data.get("collected_by")
             collected_by_other = (form.cleaned_data.get("collected_by_other") or "").strip()
-
-            issued_at = timezone.now()  # <— zamiast "now"
-            pkg.status = Package.Status.ISSUED
-            pkg.issued_at = issued_at
-            pkg.issued_by = request.user
-            pkg.collected_by = collected_by if collected_by else None
-            pkg.collected_by_name = "" if collected_by else collected_by_other
-            pkg.save(update_fields=[
-                "status", "issued_at", "issued_by", "collected_by", "collected_by_name"
-            ])
-
-            who = collected_by.name if collected_by else collected_by_other
-
-            # ✉️ e-mail — fire-and-forget w tle
-            if getattr(pkg.recipient, "email", None):
-                _email = pkg.recipient.email
-                _subject = f"Paczka odebrana: {pkg.code}"
-                _body = (
-                    f"Cześć,\n\n"
-                    f"Twoja paczka {pkg.code} została odebrana z paczkomatu.\n"
-                    f"Odebrał(a): {who}\n"
-                    f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n"
-                    f"Nadawca: {getattr(pkg.sender, 'name', '')}\n\n"
-                )
-                Thread(
-                    target=send_email_with_timeout,
-                    args=(_email, _subject, _body),
-                    kwargs={"timeout": 10},
-                    daemon=True,
-                ).start()
-
+            who = _mark_package_issued(pkg, collected_by, collected_by_other, request.user)
             messages.success(request, f"Package {pkg.code} has been delivered. Recipient: {who}.")
             return redirect("boxflow_out")
 
@@ -3278,10 +3446,76 @@ def boxflow_pack_out(request):
 
 @login_required
 @boxflow_required
+def boxflow_pack_out_multi(request):
+    """Scan several package codes into a list, then issue all of them to one
+    recipient in a single confirmation, sending one combined e-mail."""
+    if request.method == "POST":
+        codes = [c.strip() for c in request.POST.get("codes", "").split(",") if c.strip()]
+        collected_by_id = request.POST.get("collected_by") or None
+        collected_by_other = (request.POST.get("collected_by_other") or "").strip()
+        collected_by = Recipient.objects.filter(pk=collected_by_id).first() if collected_by_id else None
+
+        if not codes:
+            messages.error(request, "Scan at least one package code.")
+            return redirect("boxflow_out_multi")
+        if not collected_by and not collected_by_other:
+            messages.error(request, "Please provide the name of the recipient")
+            return redirect("boxflow_out_multi")
+
+        packages = list(Package.objects.select_related("recipient", "sender").filter(code__in=codes))
+        found_codes = {p.code for p in packages}
+        missing = [c for c in codes if c not in found_codes]
+        already_issued = [p for p in packages if p.status == Package.Status.ISSUED]
+        to_issue = [p for p in packages if p.status == Package.Status.IN_BOX]
+
+        issued_at = timezone.now()
+        for pkg in to_issue:
+            _mark_package_issued(pkg, collected_by, collected_by_other, request.user, issued_at=issued_at, notify=False)
+        who = collected_by.name if collected_by else collected_by_other
+        _send_combined_pickup_email(to_issue, who, issued_at)
+
+        if to_issue:
+            messages.success(request, f"{len(to_issue)} package(s) delivered. Recipient: {who}.")
+        if already_issued:
+            messages.info(request, f"Already issued, skipped: {', '.join(p.code for p in already_issued)}.")
+        if missing:
+            messages.warning(request, f"Not found, skipped: {', '.join(missing)}.")
+        return redirect("boxflow_out_multi")
+
+    return render(request, "boxflow/pack_out_multi.html", {
+        "recipients": Recipient.objects.order_by("name"),
+        "code_len": 10,
+    })
+
+
+@login_required
+@boxflow_required
 def boxflow_pack_detail(request, pk):
     pkg = get_object_or_404(Package.objects.select_related("sender", "recipient"), pk=pk)
     is_helpdesk = request.user.groups.filter(name__in=["Recevio_Helpdesk", "SupportCenter"]).exists()
-    return render(request, "boxflow/pack_detail.html", {"pkg": pkg, "is_helpdesk": is_helpdesk})
+    is_boxflow = request.user.groups.filter(name="Recevio_BoxFlow").exists()
+    can_edit_package = is_helpdesk or is_boxflow
+
+    if request.method == "POST" and request.POST.get("action") == "mark_picked_up":
+        if pkg.status == Package.Status.ISSUED:
+            messages.info(request, f"Package {pkg.code} was already issued.")
+            return redirect("boxflow_detail", pk=pkg.pk)
+        collected_by_id = request.POST.get("collected_by") or None
+        collected_by_other = (request.POST.get("collected_by_other") or "").strip()
+        collected_by = Recipient.objects.filter(pk=collected_by_id).first() if collected_by_id else None
+        if not collected_by and not collected_by_other:
+            messages.error(request, "Please provide the name of the recipient")
+            return redirect("boxflow_detail", pk=pkg.pk)
+        who = _mark_package_issued(pkg, collected_by, collected_by_other, request.user)
+        messages.success(request, f"Package {pkg.code} has been delivered. Recipient: {who}.")
+        return redirect("boxflow_detail", pk=pkg.pk)
+
+    return render(request, "boxflow/pack_detail.html", {
+        "pkg": pkg,
+        "is_helpdesk": is_helpdesk,
+        "can_edit_package": can_edit_package,
+        "recipients": Recipient.objects.order_by("name"),
+    })
 
 
 @login_required
@@ -3335,7 +3569,8 @@ def helpdesk_recipients(request):
             obj.name = (request.POST.get("name") or "").strip()
             email = (request.POST.get("email") or "").strip()
             obj.email = email or None
-            obj.save(update_fields=["name", "email"])
+            obj.phone = (request.POST.get("phone") or "").strip()
+            obj.save(update_fields=["name", "email", "phone"])
             messages.success(request, "Recipient updated.")
             return redirect("helpdesk_recipients")
         else:
@@ -3374,12 +3609,22 @@ def helpdesk_senders(request):
     return render(request, "boxflow/helpdesk_senders.html", {"form": form, "items": items})
 
 
+def _can_edit_package(user):
+    return user.is_authenticated and (
+        _can_helpdesk(user) or user.groups.filter(name="Recevio_BoxFlow").exists()
+    )
+
+
 @login_required
-@helpdesk_required
+@user_passes_test(_can_edit_package)
 def helpdesk_package_edit(request, pk):
     pkg = get_object_or_404(Package, pk=pk)
+    # Full Helpdesk gets the complete edit form (incl. delivery date); Reception/BoxFlow-only
+    # staff get a restricted form: sender, recipient and the reception comment only.
+    is_full_helpdesk = _can_helpdesk(request.user)
+    form_class = PackageEditForm if is_full_helpdesk else PackageEditFormLimited
     if request.method == "POST":
-        form = PackageEditForm(request.POST, instance=pkg)
+        form = form_class(request.POST, instance=pkg)
         if form.is_valid():
             obj = form.save(commit=False)
             obj.updated_by = request.user
@@ -3387,7 +3632,7 @@ def helpdesk_package_edit(request, pk):
             messages.success(request, "Package changes saved.")
             return redirect("boxflow_detail", pk=pkg.pk)
     else:
-        form = PackageEditForm(instance=pkg)
+        form = form_class(instance=pkg)
     return render(request, "boxflow/helpdesk_package_edit.html", {"form": form, "pkg": pkg})
 
 
@@ -3417,18 +3662,27 @@ def helpdesk_import_recipients(request):
     if request.method == "POST" and request.FILES.get("file"):
         f = request.FILES["file"]
         df = pd.read_excel(f) if f.name.lower().endswith((".xls", ".xlsx")) else pd.read_csv(f)
-        # kolumna 1: name, kolumna 2 (opcjonalnie): email
+        # kolumna 1: name, kolumna 2 (opcjonalnie): email, kolumna 3 (opcjonalnie): phone
         count = 0
         for _, row in df.iterrows():
             name = str(row.iloc[0]).strip()
             email = None
             if len(row) > 1 and pd.notna(row.iloc[1]):
                 email = str(row.iloc[1]).strip()
+            phone = None
+            if len(row) > 2 and pd.notna(row.iloc[2]):
+                phone = str(row.iloc[2]).strip()
             if name:
-                obj, _ = Recipient.objects.get_or_create(name=name, defaults={"email": email})
+                obj, _ = Recipient.objects.get_or_create(name=name, defaults={"email": email, "phone": phone or ""})
+                update_fields = []
                 if email and not obj.email:
                     obj.email = email
-                    obj.save(update_fields=["email"])
+                    update_fields.append("email")
+                if phone and not obj.phone:
+                    obj.phone = phone
+                    update_fields.append("phone")
+                if update_fields:
+                    obj.save(update_fields=update_fields)
                 count += 1
         messages.success(request, f"{count} recipients have been imported.")
         return redirect("helpdesk_recipients")

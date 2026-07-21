@@ -100,6 +100,8 @@
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
                 </ul>
               </li>
+            {% endif %}
+            {# ——— BOXFLOW (rendered once regardless of which other groups the user also has) ——— #}
             {% if user|has_group:"Recevio_BoxFlow" %}
               <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="boxflowDropdown" role="button"
@@ -116,37 +118,20 @@
                 </ul>
               </li>
             {% endif %}
-            {% endif %}
             {# ——— HELPDESK: SupportCenter ——— #}
             {% if user|has_group:"Recevio_Helpdesk" %}
                       <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" id="supportDropdown" role="button"
+                <a class="nav-link dropdown-toggle" href="#" id="helpdeskVisitlogDropdown" role="button"
                    data-bs-toggle="dropdown" aria-expanded="false">
                   VisitLog
                 </a>
-                <ul class="dropdown-menu" aria-labelledby="supportDropdown">
+                <ul class="dropdown-menu" aria-labelledby="helpdeskVisitlogDropdown">
                     <li><a class="dropdown-item" href="{% url 'statistics' %}">Statistics</a></li>
                   <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
                   <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
                 </ul>
               </li>
-            {% if user|has_group:"Recevio_BoxFlow" %}
-            <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" id="boxflowDropdown" role="button"
-                   data-bs-toggle="dropdown" aria-expanded="false">
-                  BoxFlow
-                </a>
-                <ul class="dropdown-menu" aria-labelledby="boxflowDropdown">
-                  {# TODO: podmień # na {% url 'boxflow_intake' %} itp. gdy dodasz ścieżki #}
-<li><a class="dropdown-item" href="{% url 'boxflow_add' %}">AddPack</a></li>
-<li><a class="dropdown-item" href="{% url 'boxflow_list' %}">PackList</a></li>
-<li><a class="dropdown-item" href="{% url 'boxflow_inbox' %}">InBoxStatus</a></li>
-<li><a class="dropdown-item" href="{% url 'boxflow_out' %}">PackOut</a></li>
-
-                </ul>
-              </li>
-              {% endif %}
 
                       <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="supportDropdown" role="button"

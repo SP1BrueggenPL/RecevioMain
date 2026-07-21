@@ -1,0 +1,104 @@
+{% extends 'base_panel.html' %}
+{% load static %}
+{% block content %}
+<link href="{% static 'css/select2.min.css' %}" rel="stylesheet">
+  <br>
+  <br>
+  <section class="intro-single py-4 d-flex align-items-start justify-content-center">
+
+  <div class="card shadow-sm p-4" style="max-width: 560px; width: 100%;">
+    <h1 class="h3 text-center mb-1">PackOut — multiple packages</h1>
+    <p class="text-muted text-center mb-4">Scan every package the person is collecting, then confirm once.</p>
+
+    <div class="mb-3">
+      <label class="form-label">Scan code</label>
+      <input type="text" id="scanInput" class="form-control" autocomplete="off" autofocus placeholder="Scan or type a code…">
+      <input type="hidden" id="code-len" value="{{ code_len }}">
+    </div>
+
+    <div id="scannedList" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+    <form method="post" id="multiOutForm">
+      {% csrf_token %}
+      <input type="hidden" name="codes" id="codesField" value="">
+
+      <div class="mb-3">
+        <label class="form-label">Recipient</label>
+        <select name="collected_by" id="id_collected_by" class="form-select">
+          <option value="">----------</option>
+          {% for r in recipients %}
+            <option value="{{ r.pk }}">{{ r.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Or type a name (if not on the list)</label>
+        <input type="text" name="collected_by_other" class="form-control">
+      </div>
+
+      <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'boxflow_out' %}">Back to single PackOut</a>
+        <button class="btn btn-success" type="submit" id="confirmBtn" disabled>Confirm all</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+(function () {
+  const scanInput = document.getElementById('scanInput');
+  const scannedList = document.getElementById('scannedList');
+  const codesField = document.getElementById('codesField');
+  const confirmBtn = document.getElementById('confirmBtn');
+  const requiredLen = parseInt(document.getElementById('code-len').value || '10', 10);
+
+  let codes = [];
+
+  function render() {
+    scannedList.innerHTML = '';
+    codes.forEach((code, idx) => {
+      const chip = document.createElement('span');
+      chip.className = 'badge bg-secondary d-flex align-items-center gap-2 p-2';
+      chip.textContent = code;
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'btn-close btn-close-white';
+      rm.style.fontSize = '0.6rem';
+      rm.addEventListener('click', () => { codes.splice(idx, 1); render(); });
+      chip.appendChild(rm);
+      scannedList.appendChild(chip);
+    });
+    codesField.value = codes.join(',');
+    confirmBtn.disabled = codes.length === 0;
+  }
+
+  function trySubmit() {
+    const val = (scanInput.value || '').trim();
+    if (val.length >= requiredLen) {
+      if (!codes.includes(val)) codes.push(val);
+      scanInput.value = '';
+      render();
+    }
+  }
+
+  scanInput.addEventListener('input', trySubmit);
+  scanInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); trySubmit(); }
+  });
+
+  document.getElementById('multiOutForm').addEventListener('submit', () => {
+    codesField.value = codes.join(',');
+  });
+})();
+</script>
+<script src="{% static 'lib/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'js/vendor/select2/select2.full.min.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.jQuery) {
+      jQuery('#id_collected_by').select2({ width: '100%' });
+    }
+  });
+</script>
+{% endblock %}

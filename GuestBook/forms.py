@@ -7,6 +7,7 @@ from django.utils.translation import gettext_lazy as _
 class UserLoginForm(forms.ModelForm):
     username = forms.CharField(widget=forms.TextInput(attrs={'id': 'floatingInput', 'class': 'form-control mb-3'}), required=True)
     password = forms.CharField(widget=forms.PasswordInput(attrs={'id': 'floatingPassword', 'class': 'form-control mb-3'}), required=True)
+    remember_me = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
 
     class Meta:
         model = User
@@ -260,9 +261,21 @@ class PackageForm(forms.ModelForm):
         ),
     )
 
+    label_code = forms.CharField(
+        label="Package number (from label)",
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
+
+    staff_comment = forms.CharField(
+        label="Reception comment",
+        required=False,
+        widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+    )
+
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "new_sender", "recipient"]
+        fields = ["delivered_at", "sender", "new_sender", "recipient", "label_code", "staff_comment"]
 
     def clean(self):
         data = super().clean()
@@ -312,6 +325,12 @@ class ScanForm(forms.Form):
         required=False,
         widget=forms.Select(attrs={"class": "form-select"}),
     )
+    collected_by_other = forms.CharField(
+        label=_("Or type a name (if not on the list)"),
+        max_length=150,
+        required=False,
+        widget=forms.TextInput(attrs={"class": "form-control"}),
+    )
 
 
     def __init__(self, *args, **kwargs):
@@ -337,19 +356,33 @@ class SenderForm(forms.ModelForm):
 class RecipientForm(forms.ModelForm):
     class Meta:
         model = Recipient
-        fields = ["name", "email"]
+        fields = ["name", "email", "phone"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "phone": forms.TextInput(attrs={"class": "form-control"}),
         }
 
 
 class PackageEditForm(forms.ModelForm):
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "recipient"]
+        fields = ["delivered_at", "sender", "recipient", "staff_comment"]
         widgets = {
             "delivered_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local", "class": "form-control"}),
             "sender": forms.Select(attrs={"class": "form-select"}),
             "recipient": forms.Select(attrs={"class": "form-select"}),
+            "staff_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
+        }
+
+
+class PackageEditFormLimited(forms.ModelForm):
+    """Restricted edit form for Reception/BoxFlow staff: no delivery-date changes."""
+    class Meta:
+        model = Package
+        fields = ["sender", "recipient", "staff_comment"]
+        widgets = {
+            "sender": forms.Select(attrs={"class": "form-select"}),
+            "recipient": forms.Select(attrs={"class": "form-select"}),
+            "staff_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }

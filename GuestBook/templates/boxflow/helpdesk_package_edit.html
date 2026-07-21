@@ -1,14 +1,19 @@
 {% extends "base_panel.html" %}
+{% load static %}
 {% block content %}
+<link href="{% static 'css/select2.min.css' %}" rel="stylesheet">
 <br><br><br>
 <div class="container">
   <h1 class="title-single mb-3">Edit pack – {{ pkg.code }}</h1>
   <form method="post" class="card p-3">
     {% csrf_token %}
     <div class="row g-3">
-      <div class="col-md-4">{{ form.delivered_at.label_tag }} {{ form.delivered_at }}</div>
+      {% if form.delivered_at %}
+        <div class="col-md-4">{{ form.delivered_at.label_tag }} {{ form.delivered_at }}</div>
+      {% endif %}
       <div class="col-md-4">{{ form.sender.label_tag }} {{ form.sender }}</div>
       <div class="col-md-4">{{ form.recipient.label_tag }} {{ form.recipient }}</div>
+      <div class="col-12">{{ form.staff_comment.label_tag }} {{ form.staff_comment }}</div>
     </div>
     <div class="mt-3 d-flex gap-2">
       <a href="{% url 'boxflow_detail' pkg.pk %}" class="btn btn-secondary">Cancel</a>
@@ -16,4 +21,13 @@
     </div>
   </form>
 </div>
+<script src="{% static 'lib/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'js/vendor/select2/select2.full.min.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    if (window.jQuery) {
+      jQuery('#id_sender, #id_recipient').select2({ width: '100%' });
+    }
+  });
+</script>
 {% endblock %}

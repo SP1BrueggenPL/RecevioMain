@@ -46,6 +46,11 @@
                 {{ form.password }}
               </div>
 
+              <div class="form-check mb-3 text-start">
+                {{ form.remember_me }}
+                <label class="form-check-label" for="{{ form.remember_me.id_for_label }}">Zapamiętaj mnie</label>
+              </div>
+
               <button class="w-100 btn btn-lg btn-primary" type="submit">Zaloguj się</button>
             </form>
 
