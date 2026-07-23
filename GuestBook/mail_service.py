@@ -92,3 +92,29 @@ def send_via_acs(
     except Exception as e:
         logger.exception("[SMTP EMAIL ERROR] %s", e)
         return "error"
+
+
+def send_pending_package_reminder(email: str, packages_info: list) -> str:
+    """
+    Send the "package(s) waiting for pickup" reminder e-mail — the same content
+    used by the automatic 48h reminder job and the manual "send reminder" button
+    on the package detail page.
+    packages_info: list of dicts with keys "code", "sender", "delivered_at", "comment" (optional).
+    Returns 'sent' | 'skipped' | 'error' (see send_via_acs).
+    """
+    lines = "\n".join(
+        f"- {p['code']} (nadawca: {p['sender']}, dostarczono: {p['delivered_at']:%d.%m.%Y %H:%M})"
+        + (f" — {p['comment']}" if p.get("comment") else "")
+        for p in packages_info
+    )
+    subject = (
+        f"Przypomnienie: {len(packages_info)} paczki czekają na odbiór"
+        if len(packages_info) > 1 else f"Przypomnienie: paczka {packages_info[0]['code']} czeka na odbiór"
+    )
+    body = (
+        f"Cześć,\n\n"
+        f"Poniższe paczki wciąż czekają na odbiór z paczkomatu:\n\n"
+        f"{lines}\n\n"
+        f"Prosimy o odbiór w ciągu 48h.\n\n"
+    )
+    return send_via_acs(email, subject, body)

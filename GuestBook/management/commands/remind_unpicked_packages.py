@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from GuestBook.models import Package
-from GuestBook.mail_service import send_via_acs
+from GuestBook.mail_service import send_pending_package_reminder
 
 logger = logging.getLogger(__name__)
 
@@ -35,23 +35,16 @@ class Command(BaseCommand):
 
         now = timezone.now()
         for recipient, pkgs in by_recipient.items():
-            lines = "\n".join(
-                f"- {p.code} (nadawca: {getattr(p.sender, 'name', '')}, "
-                f"dostarczono: {p.delivered_at:%d.%m.%Y %H:%M})"
-                + (f" — {p.staff_comment}" if p.staff_comment else "")
+            packages_info = [
+                {
+                    "code": p.code,
+                    "sender": getattr(p.sender, "name", ""),
+                    "delivered_at": p.delivered_at,
+                    "comment": p.staff_comment,
+                }
                 for p in pkgs
-            )
-            subject = (
-                f"Przypomnienie: {len(pkgs)} paczki czekają na odbiór"
-                if len(pkgs) > 1 else f"Przypomnienie: paczka {pkgs[0].code} czeka na odbiór"
-            )
-            body = (
-                f"Cześć,\n\n"
-                f"Poniższe paczki wciąż czekają na odbiór z paczkomatu:\n\n"
-                f"{lines}\n\n"
-                f"Prosimy o odbiór w ciągu 48h.\n\n"
-            )
-            status = send_via_acs(recipient.email, subject, body)
+            ]
+            status = send_pending_package_reminder(recipient.email, packages_info)
             logger.info(f"Reminder ({status}) sent to {recipient.email} for {len(pkgs)} package(s)")
 
             for pkg in pkgs:

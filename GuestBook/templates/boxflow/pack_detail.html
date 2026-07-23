@@ -70,8 +70,19 @@
             <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#pickupModal">
               Mark as picked up
             </button>
+            <form method="post" class="d-inline">
+              {% csrf_token %}
+              <input type="hidden" name="action" value="send_reminder">
+              <button type="submit" class="btn btn-outline-secondary"
+                      {% if not pkg.recipient.email %}disabled title="Recipient has no e-mail address"{% endif %}>
+                Send pickup reminder
+              </button>
+            </form>
           {% endif %}
         </div>
+        {% if pkg.reminder_sent_at %}
+          <div class="mt-2 text-muted small">Reminder e-mail sent: {{ pkg.reminder_sent_at|date:"d.m.Y, H:i" }}</div>
+        {% endif %}
       </div>
     </div>
   </div>
