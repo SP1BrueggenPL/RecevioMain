@@ -3520,6 +3520,30 @@ def boxflow_pack_detail(request, pk):
         messages.success(request, f"Package {pkg.code} has been delivered. Recipient: {who}.")
         return redirect("boxflow_detail", pk=pkg.pk)
 
+    if request.method == "POST" and request.POST.get("action") == "send_reminder":
+        if pkg.status == Package.Status.ISSUED:
+            messages.info(request, f"Package {pkg.code} was already issued.")
+            return redirect("boxflow_detail", pk=pkg.pk)
+        if not getattr(pkg.recipient, "email", None):
+            messages.error(request, "This recipient has no e-mail address on file.")
+            return redirect("boxflow_detail", pk=pkg.pk)
+
+        from GuestBook.mail_service import send_pending_package_reminder
+        status = send_pending_package_reminder(pkg.recipient.email, [{
+            "code": pkg.code,
+            "sender": getattr(pkg.sender, "name", ""),
+            "delivered_at": pkg.delivered_at,
+            "comment": pkg.staff_comment,
+        }])
+        pkg.reminder_sent_at = timezone.now()
+        pkg.save(update_fields=["reminder_sent_at"])
+
+        if status == "sent":
+            messages.success(request, f"Reminder e-mail sent to {pkg.recipient.email}.")
+        else:
+            messages.error(request, f"Could not send the reminder e-mail (status: {status}).")
+        return redirect("boxflow_detail", pk=pkg.pk)
+
     return render(request, "boxflow/pack_detail.html", {
         "pkg": pkg,
         "is_helpdesk": is_helpdesk,
