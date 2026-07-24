@@ -1,5 +1,7 @@
 ﻿from django.utils.translation import activate
-from datetime import datetime
+from datetime import datetime, timedelta
+from collections import defaultdict
+from GuestBook.mail_service import send_pending_package_reminder
 from django.contrib.auth.forms import PasswordChangeForm
 from django.contrib.auth import update_session_auth_hash
 from openpyxl.utils import get_column_letter
@@ -12,7 +14,7 @@ import openpyxl
 from django.http import FileResponse
 from .utils import generate_bhp_pdf
 from django.contrib.auth.decorators import user_passes_test
-from .task import close_expired_visitors_task, remind_unpicked_packages_task
+from .task import schedule_recurring_tasks
 from django.contrib import auth
 from .forms import UserLoginForm
 from .utils import clean_next_url
@@ -204,12 +206,7 @@ def send_zpl_to_printer(zpl_data: str, printer_ip='10.30.40.150', port=9100):
     sock.close()
 
 try:
-    close_expired_visitors_task(repeat=3600)
-except Exception:
-    pass  # DB not yet migrated (e.g. first deploy); background_task table created on migrate
-
-try:
-    remind_unpicked_packages_task(repeat=3600)
+    schedule_recurring_tasks()
 except Exception:
     pass  # DB not yet migrated (e.g. first deploy); background_task table created on migrate
 
@@ -3321,13 +3318,82 @@ def boxflow_pack_list(request):
     })
 
 
+REMINDER_THRESHOLD = timedelta(hours=48)
+
+
 @login_required
 @boxflow_required
 def boxflow_inbox_status(request):
     qs = Package.objects.select_related("sender", "recipient").filter(
         status=Package.Status.IN_BOX
     ).order_by("-delivered_at")
-    return render(request, "boxflow/inbox_status.html", {"packages": qs})
+    overdue_threshold = timezone.now() - REMINDER_THRESHOLD
+    return render(request, "boxflow/inbox_status.html", {
+        "packages": qs,
+        "overdue_threshold": overdue_threshold,
+    })
+
+
+@login_required
+@boxflow_required
+def boxflow_send_overdue_reminders(request):
+    """Manually trigger the same 48h pickup reminder e-mail sent by the
+    scheduled remind_unpicked_packages background task, for every package
+    that's been sitting in the locker 48h+ without one yet."""
+    if request.method != "POST":
+        return redirect("boxflow_inbox")
+
+    threshold = timezone.now() - REMINDER_THRESHOLD
+    packages = list(
+        Package.objects.select_related("sender", "recipient").filter(
+            status=Package.Status.IN_BOX,
+            delivered_at__lte=threshold,
+            reminder_sent_at__isnull=True,
+        )
+    )
+
+    by_recipient = defaultdict(list)
+    skipped_no_email = 0
+    for pkg in packages:
+        if getattr(pkg.recipient, "email", None):
+            by_recipient[pkg.recipient].append(pkg)
+        else:
+            skipped_no_email += 1
+
+    now = timezone.now()
+    sent_count = 0
+    error_count = 0
+    for recipient, pkgs in by_recipient.items():
+        packages_info = [
+            {
+                "code": p.code,
+                "sender": getattr(p.sender, "name", ""),
+                "delivered_at": p.delivered_at,
+                "comment": p.staff_comment,
+            }
+            for p in pkgs
+        ]
+        status = send_pending_package_reminder(recipient.email, packages_info)
+        if status == "sent":
+            sent_count += len(pkgs)
+            for pkg in pkgs:
+                pkg.reminder_sent_at = now
+                pkg.save(update_fields=["reminder_sent_at"])
+        else:
+            error_count += len(pkgs)
+
+    if not packages:
+        messages.info(request, "No packages have been sitting in the locker for 48h or more.")
+    else:
+        if sent_count:
+            messages.success(request, f"Reminder e-mail sent for {sent_count} package(s).")
+        if error_count:
+            messages.error(request, f"Could not send the reminder e-mail for {error_count} package(s).")
+        if skipped_no_email:
+            messages.warning(request, f"Skipped {skipped_no_email} package(s): recipient has no e-mail address on file.")
+
+    return redirect("boxflow_inbox")
+
 
 def _mark_package_issued(pkg, collected_by, collected_by_other, user, issued_at=None, notify=True):
     """Shared pickup logic: marks a package issued and (optionally) fires the confirmation email.
@@ -3528,7 +3594,6 @@ def boxflow_pack_detail(request, pk):
             messages.error(request, "This recipient has no e-mail address on file.")
             return redirect("boxflow_detail", pk=pkg.pk)
 
-        from GuestBook.mail_service import send_pending_package_reminder
         status = send_pending_package_reminder(pkg.recipient.email, [{
             "code": pkg.code,
             "sender": getattr(pkg.sender, "name", ""),
