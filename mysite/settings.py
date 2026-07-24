@@ -231,3 +231,7 @@ EMAIL_USE_SSL = os.getenv('SMTP_USE_SSL', 'false').lower() == 'true'
 EMAIL_HOST_USER = os.getenv('SMTP_USER', '')
 EMAIL_HOST_PASSWORD = os.getenv('SMTP_PASSWORD', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'recevio@brueggen.com')
+# Without this the SMTP fallback in mail_service.send_via_acs can block for
+# minutes if the mail server is unreachable, stalling whichever request or
+# background task (e.g. the 48h pickup reminder job) triggered the send.
+EMAIL_TIMEOUT = int(os.getenv('SMTP_TIMEOUT', '10'))

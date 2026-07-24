@@ -97,6 +97,7 @@ urlpatterns = [
     path("boxflow/list/", views.boxflow_pack_list, name="boxflow_list"),
     path('boxflow/<int:pk>/delete/', views.boxflow_delete_pack, name='boxflow_delete'),
     path("boxflow/inbox/", views.boxflow_inbox_status, name="boxflow_inbox"),
+    path("boxflow/inbox/send-reminders/", views.boxflow_send_overdue_reminders, name="boxflow_send_overdue_reminders"),
     path("boxflow/out/", views.boxflow_pack_out, name="boxflow_out"),
     path("boxflow/out/multi/", views.boxflow_pack_out_multi, name="boxflow_out_multi"),
     path("boxflow/<int:pk>/", views.boxflow_pack_detail, name="boxflow_detail"),
