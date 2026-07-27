@@ -3774,10 +3774,10 @@ def helpdesk_import_recipients(request):
             if name:
                 obj, _ = Recipient.objects.get_or_create(name=name, defaults={"email": email, "phone": phone or ""})
                 update_fields = []
-                if email and not obj.email:
+                if email and obj.email != email:
                     obj.email = email
                     update_fields.append("email")
-                if phone and not obj.phone:
+                if phone and obj.phone != phone:
                     obj.phone = phone
                     update_fields.append("phone")
                 if update_fields:
