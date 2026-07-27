@@ -367,11 +367,12 @@ class RecipientForm(forms.ModelForm):
 class PackageEditForm(forms.ModelForm):
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "recipient", "staff_comment"]
+        fields = ["delivered_at", "sender", "recipient", "label_code", "staff_comment"]
         widgets = {
             "delivered_at": forms.DateTimeInput(format="%Y-%m-%dT%H:%M", attrs={"type": "datetime-local", "class": "form-control"}),
             "sender": forms.Select(attrs={"class": "form-select"}),
             "recipient": forms.Select(attrs={"class": "form-select"}),
+            "label_code": forms.TextInput(attrs={"class": "form-control"}),
             "staff_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }
 
@@ -380,9 +381,10 @@ class PackageEditFormLimited(forms.ModelForm):
     """Restricted edit form for Reception/BoxFlow staff: no delivery-date changes."""
     class Meta:
         model = Package
-        fields = ["sender", "recipient", "staff_comment"]
+        fields = ["sender", "recipient", "label_code", "staff_comment"]
         widgets = {
             "sender": forms.Select(attrs={"class": "form-select"}),
             "recipient": forms.Select(attrs={"class": "form-select"}),
+            "label_code": forms.TextInput(attrs={"class": "form-control"}),
             "staff_comment": forms.Textarea(attrs={"class": "form-control", "rows": 2}),
         }

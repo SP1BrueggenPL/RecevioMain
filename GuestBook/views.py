@@ -3310,11 +3310,13 @@ def boxflow_pack_list(request):
         )
 
     is_helpdesk = request.user.groups.filter(name="Recevio_Helpdesk").exists()
+    can_delete_package = is_helpdesk or _can_boxflow(request.user)
 
     return render(request, "boxflow/pack_list.html", {
         "packages": qs,
         "query": q,
         "is_helpdesk": is_helpdesk,   # ← tylko to dodajemy
+        "can_delete_package": can_delete_package,
     })
 
 
@@ -3590,11 +3592,17 @@ def boxflow_pack_detail(request, pk):
         if pkg.status == Package.Status.ISSUED:
             messages.info(request, f"Package {pkg.code} was already issued.")
             return redirect("boxflow_detail", pk=pkg.pk)
-        if not getattr(pkg.recipient, "email", None):
+
+        reminder_recipient_id = request.POST.get("reminder_recipient") or None
+        reminder_recipient = (
+            Recipient.objects.filter(pk=reminder_recipient_id).first()
+            if reminder_recipient_id else pkg.recipient
+        )
+        if not getattr(reminder_recipient, "email", None):
             messages.error(request, "This recipient has no e-mail address on file.")
             return redirect("boxflow_detail", pk=pkg.pk)
 
-        status = send_pending_package_reminder(pkg.recipient.email, [{
+        status = send_pending_package_reminder(reminder_recipient.email, [{
             "code": pkg.code,
             "sender": getattr(pkg.sender, "name", ""),
             "delivered_at": pkg.delivered_at,
@@ -3604,7 +3612,7 @@ def boxflow_pack_detail(request, pk):
         pkg.save(update_fields=["reminder_sent_at"])
 
         if status == "sent":
-            messages.success(request, f"Reminder e-mail sent to {pkg.recipient.email}.")
+            messages.success(request, f"Reminder e-mail sent to {reminder_recipient.email}.")
         else:
             messages.error(request, f"Could not send the reminder e-mail (status: {status}).")
         return redirect("boxflow_detail", pk=pkg.pk)
@@ -3789,7 +3797,7 @@ def helpdesk_import_recipients(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_authenticated and u.groups.filter(name="Recevio_Helpdesk").exists())
+@user_passes_test(lambda u: _can_helpdesk(u) or _can_boxflow(u))
 def boxflow_delete_pack(request, pk):
     pkg = get_object_or_404(Package, pk=pk)
     if request.method != 'POST':
