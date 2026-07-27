@@ -3176,7 +3176,7 @@ def boxflow_add_pack(request):
                 _email = pkg.recipient.email
                 _subject = f"Paczka w paczkomacie: {pkg.code}"
                 _body = (
-                    f"Cześć,\n\n"
+                    f"Dzień dobry,\n\n"
                     f"Dla odbiorcy: {getattr(pkg.recipient, 'name', '')} zarejestrowano paczkę w paczkomacie.\n"
                     f"Kod: {pkg.code}\n"
                     f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
@@ -3419,7 +3419,7 @@ def _mark_package_issued(pkg, collected_by, collected_by_other, user, issued_at=
         _email = pkg.recipient.email
         _subject = f"Paczka odebrana: {pkg.code}"
         _body = (
-            f"Cześć,\n\n"
+            f"Dzień dobry,\n\n"
             f"Twoja paczka {pkg.code} została odebrana z paczkomatu.\n"
             f"Odebrał(a): {who}\n"
             f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n"
@@ -3450,7 +3450,7 @@ def _send_combined_pickup_email(packages, who, issued_at):
         )
         subject = f"Paczki odebrane ({len(pkgs)})" if len(pkgs) > 1 else f"Paczka odebrana: {pkgs[0].code}"
         body = (
-            f"Cześć,\n\n"
+            f"Dzień dobry,\n\n"
             f"Poniższe paczki zostały odebrane z paczkomatu.\n"
             f"Odebrał(a): {who}\n"
             f"Data i godzina odbioru: {issued_at:%d.%m.%Y %H:%M}\n\n"
@@ -3774,10 +3774,10 @@ def helpdesk_import_recipients(request):
             if name:
                 obj, _ = Recipient.objects.get_or_create(name=name, defaults={"email": email, "phone": phone or ""})
                 update_fields = []
-                if email and not obj.email:
+                if email and obj.email != email:
                     obj.email = email
                     update_fields.append("email")
-                if phone and not obj.phone:
+                if phone and obj.phone != phone:
                     obj.phone = phone
                     update_fields.append("phone")
                 if update_fields:
