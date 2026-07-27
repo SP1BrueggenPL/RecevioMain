@@ -112,7 +112,7 @@ def send_pending_package_reminder(email: str, packages_info: list) -> str:
         if len(packages_info) > 1 else f"Przypomnienie: paczka {packages_info[0]['code']} czeka na odbiór"
     )
     body = (
-        f"Cześć,\n\n"
+        f"Dzień dobry,\n\n"
         f"Poniższe paczki wciąż czekają na odbiór z paczkomatu:\n\n"
         f"{lines}\n\n"
         f"Prosimy o odbiór w ciągu 48h.\n\n"
