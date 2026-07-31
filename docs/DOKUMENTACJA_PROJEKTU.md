@@ -206,16 +206,16 @@ erDiagram
     }
     COMPANY {
         string company_name
-        fk host_name
+        ref host_name
     }
     VISITOR {
         string first_name
         string last_name
         string phone
-        fk factory "Company (opcjonalne)"
+        ref factory "Company (opcjonalne)"
         string company_name_text "firma wpisana ręcznie"
         text visit_purpose
-        fk host
+        ref host
         string visitor_id "numer ID / hex UID karty"
         bool production_area
         bool with_supervision
@@ -227,10 +227,10 @@ erDiagram
         string language "pl/en"
         string safety_question_1_2_3
         bool approved
-        fk approved_by "User"
+        ref approved_by "User"
         bool known_guest
-        fk returned_by "User"
-        fk reservation "opcjonalne 1:1"
+        ref returned_by "User"
+        ref reservation "opcjonalne 1:1"
         string sms_status "pending/sent/timeout/error/skipped"
         string print_status "pending/printed/timeout/error/skipped"
         bool id_issued
@@ -246,17 +246,17 @@ erDiagram
         string badge_id "unikalny, powiązany z kartą RFID"
     }
     ADMINPROFILE {
-        fk user "1:1"
+        ref user "1:1"
         image signature
         string phone_number
         string printer_address
         int printer_port
     }
     RESERVATION {
-        fk user
+        ref user
         string visitor_first_name_last_name
-        fk company
-        fk host
+        ref company
+        ref host
         date date
         time time
         bool conference_needed
@@ -266,7 +266,7 @@ erDiagram
         datetime cancelled_at
     }
     RESERVATIONCODE {
-        fk reservation "1:1"
+        ref reservation "1:1"
         string code "6 cyfr"
         int usage_count
         int max_uses
@@ -285,20 +285,20 @@ erDiagram
     }
     PACKAGE {
         datetime delivered_at
-        fk sender
-        fk recipient
+        ref sender
+        ref recipient
         string code "unikalny, np. BXxxxxxxxx"
         string label_code "nr z etykiety przewoźnika"
         string status "in_box/issued"
         text staff_comment
         image label_photo
         datetime reminder_sent_at
-        fk collected_by "Recipient"
+        ref collected_by "Recipient"
         string collected_by_name "wolny tekst"
         string phone_number
         datetime issued_at
-        fk issued_by "User"
-        fk updated_by "User"
+        ref issued_by "User"
+        ref updated_by "User"
     }
 ```
 
