@@ -20,7 +20,9 @@
       "Bash(node -e ' *)",
       "Bash(mkdir -p unpacked_mini)",
       "Bash(rm -rf unpacked_mini/*)",
-      "Bash(unzip -q mini_orient_test.docx -d unpacked_mini)"
+      "Bash(unzip -q mini_orient_test.docx -d unpacked_mini)",
+      "mcp__Claude_Code_Remote__add_repo",
+      "mcp__Claude_Code_Remote__register_repo_root"
     ]
   }
 }
