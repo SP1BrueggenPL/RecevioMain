@@ -13,7 +13,16 @@
       "Bash(pip3 show *)",
       "Bash(unzip -p przyklad_import_odbiorcy.xlsx xl/sharedStrings.xml)",
       "Bash(unzip -p przyklad_import_odbiorcy.xlsx xl/worksheets/sheet1.xml)",
-      "mcp__Claude_Code_Remote__send_later"
+      "mcp__Claude_Code_Remote__send_later",
+      "Bash(mkdir -p unpacked2)",
+      "Bash(rm -rf unpacked2/*)",
+      "Bash(unzip -q Dokumentacja_Recevio.docx -d unpacked2)",
+      "Bash(node -e ' *)",
+      "Bash(mkdir -p unpacked_mini)",
+      "Bash(rm -rf unpacked_mini/*)",
+      "Bash(unzip -q mini_orient_test.docx -d unpacked_mini)",
+      "mcp__Claude_Code_Remote__add_repo",
+      "mcp__Claude_Code_Remote__register_repo_root"
     ]
   }
 }
