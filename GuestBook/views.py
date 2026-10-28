@@ -28,6 +28,7 @@ from django.db.models import Case, When, Value, BooleanField
 from .models import TrustedVisitor
 from django.utils.translation import gettext as _
 from .models import Reservation, AdminProfile, ReservationCode
+from .models import RegistrationMethod, RegistrationStage, CompletionScreenContent
 from .forms import ReservationForm
 from .models import Company, Host
 from django.shortcuts import render, get_object_or_404, redirect
@@ -310,10 +311,38 @@ def choose_language(request):
         return redirect('choose_method')
     return render(request, 'kiosk/language_selection.html')
 
+METHOD_TILE_META = {
+    'manual': {'url_name': 'enter_id', 'icon': 'images/manual_registration.png', 'alt': 'Manual Registration'},
+    'badge': {'url_name': 'enter_badge', 'icon': 'images/chip.png', 'alt': 'badge'},
+    'code': {'url_name': 'enter_code', 'icon': 'images/sms_code.png', 'alt': 'code'},
+    'exit': {'url_name': 'exit_badge', 'icon': 'images/exit.png', 'alt': 'Exit'},
+}
+
+
+def _require_method_active(slug, request):
+    """Call at the top of every kiosk method-entry view. Returns a redirect back
+    to the method picker if that method is currently disabled, else None."""
+    if not RegistrationMethod.objects.filter(slug=slug, is_active=True).exists():
+        from django.urls import reverse
+        return redirect(f"{reverse('choose_method')}?unavailable={slug}")
+    return None
+
+
 def choose_method_view(request):
-    return render(request, 'kiosk/choose_method.html')
+    tiles = []
+    for method in RegistrationMethod.objects.filter(is_active=True).order_by('sort_order', 'id'):
+        meta = METHOD_TILE_META.get(method.slug)
+        if meta:
+            tiles.append({'label': method.label, **meta})
+    return render(request, 'kiosk/choose_method.html', {
+        'tiles': tiles,
+        'unavailable': request.GET.get('unavailable'),
+    })
 
 def enter_visitor_id(request):
+    guard = _require_method_active('manual', request)
+    if guard:
+        return guard
     if request.method == 'POST':
         visitor_id = request.POST.get('visitor_id')
         request.session['visitor_id'] = visitor_id
@@ -657,6 +686,7 @@ def finish_registration(request, visitor_id):
         'is_production': visitor.production_area,
         'zpl_for_print': zpl_for_print,
         'visitor_id': visitor.pk,
+        'content': CompletionScreenContent.get_for('manual'),
     })
 
 
@@ -664,6 +694,9 @@ def finish_registration(request, visitor_id):
 # dla pestki
 
 def enter_badge_view(request):
+    guard = _require_method_active('badge', request)
+    if guard:
+        return guard
     if request.method == 'POST':
         badge_id = request.POST.get('badge_id')
         request.session['registration_mode'] = 'badge'
@@ -1029,6 +1062,7 @@ def finish_registration_trusted_view(request, visitor_id):
         'badge_css': badge_css,
         'is_production': visitor.production_area,
         'show_badge': show_badge,
+        'content': CompletionScreenContent.get_for('badge'),
     })
 
 import threading
@@ -1097,6 +1131,9 @@ from django.utils import timezone
 from django.db.models import Q
 
 def exit_badge_view(request):
+    guard = _require_method_active('exit', request)
+    if guard:
+        return guard
     if request.method == 'POST':
         badge_id = request.POST.get('badge_id', '').strip()
         now = timezone.localtime()
@@ -1147,6 +1184,9 @@ def exit_done_view(request, visitor_id=None):
 # dla kodu
 
 def enter_code_view(request):
+    guard = _require_method_active('code', request)
+    if guard:
+        return guard
     if request.method == 'POST':
         code_input = request.POST.get('code')
 
@@ -1297,7 +1337,6 @@ def _has_meaningful_changes(visitor, reservation, signature_path, safety_answers
     return False
 
 
-@login_required
 def finalize_from_code_view(request):
     reservation_id = request.session.get('reservation_id')
     signature_path = request.session.get('signature_path')
@@ -1490,6 +1529,7 @@ def complete_code_view(request, reservation_id=None):
         'badge_color': badge_color,
         'badge_css': badge_css,
         'is_production': visitor.production_area,
+        'content': CompletionScreenContent.get_for('code'),
     })
 
 
@@ -3741,6 +3781,96 @@ def helpdesk_package_edit(request, pk):
     else:
         form = form_class(instance=pkg)
     return render(request, "boxflow/helpdesk_package_edit.html", {"form": form, "pkg": pkg})
+
+
+@login_required
+@helpdesk_required
+def reservation_code_create_view(request):
+    """Issue a Reservation + ReservationCode for the kiosk 'registration code'
+    method, without any SMS/email delivery (staff relay the code themselves)."""
+    if request.method == 'POST':
+        form = ReservationCodeIssueForm(request.POST)
+        if form.is_valid():
+            reservation = form.save(commit=False)
+            reservation.user = request.user
+            reservation.status = 'sent'
+            reservation.sms_status = 'skipped'
+            reservation.save()
+            code = ReservationCode.objects.create(reservation=reservation)
+            messages.success(request, f"Code generated: {code.code}")
+            return redirect('reservation_code_create')
+    else:
+        form = ReservationCodeIssueForm()
+
+    recent_codes = (ReservationCode.objects
+                    .select_related('reservation', 'reservation__host')
+                    .order_by('-created_at')[:25])
+    return render(request, 'panel/reservation_code_create.html', {
+        'form': form,
+        'recent_codes': recent_codes,
+    })
+
+
+@login_required
+@helpdesk_required
+def registration_methods_panel(request):
+    for screen in ('manual', 'badge', 'code'):
+        CompletionScreenContent.get_for(screen)
+    contents = {c.screen: c for c in CompletionScreenContent.objects.all()}
+
+    # Methods with a signature+completion sub-flow (exit does not have one).
+    SCREEN_SLUGS = {'manual', 'badge', 'code'}
+
+    lanes = []
+    for method in RegistrationMethod.objects.prefetch_related('stages').order_by('sort_order', 'id'):
+        lanes.append({
+            'method': method,
+            'stages': list(method.stages.all()),
+            'has_signature': method.slug in SCREEN_SLUGS,
+            'content': contents.get(method.slug),
+        })
+
+    return render(request, 'panel/registration_methods.html', {
+        'lanes': lanes,
+    })
+
+
+@login_required
+@helpdesk_required
+@require_POST
+def registration_method_toggle(request):
+    method = get_object_or_404(RegistrationMethod, pk=request.POST.get('method_id'))
+    method.is_active = request.POST.get('is_active') == 'true'
+    method.updated_by = request.user
+    method.save(update_fields=['is_active', 'updated_by', 'updated_at'])
+    return JsonResponse({'ok': True, 'is_active': method.is_active})
+
+
+@login_required
+@helpdesk_required
+@require_POST
+def registration_stage_toggle(request):
+    stage = get_object_or_404(RegistrationStage, pk=request.POST.get('stage_id'))
+    if not stage.is_configurable:
+        return JsonResponse({'ok': False, 'error': 'This stage cannot be toggled.'}, status=400)
+    stage.is_active = request.POST.get('is_active') == 'true'
+    stage.save(update_fields=['is_active'])
+    return JsonResponse({'ok': True, 'is_active': stage.is_active})
+
+
+@login_required
+@helpdesk_required
+@require_POST
+def completion_content_save(request):
+    content = get_object_or_404(CompletionScreenContent, screen=request.POST.get('screen'))
+    for field in ('heading', 'subheading', 'body_no_badge', 'footer_note'):
+        if field in request.POST:
+            setattr(content, field, request.POST.get(field, ''))
+    if content.screen == 'manual':
+        content.print_popup_enabled = request.POST.get('print_popup_enabled') == 'true'
+    content.updated_by = request.user
+    content.save()
+    return JsonResponse({'ok': True})
 
 
 # Import list z Excela (CSV/XLSX) – osobno dla nadawców i odbiorców

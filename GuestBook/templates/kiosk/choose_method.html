@@ -7,30 +7,21 @@
     {% trans "Please select the registration method" %}
   </h1>
 
-  <div class="registration-options">
-    <!-- Rejestracja standardowa -->
-    <div class="method">
-      <a href="{% url 'enter_id' %}" class="square-btn">
-        <img src="{% static 'images/manual_registration.png' %}" alt="Manual Registration" style="max-width: 80%; max-height: 80%;">
-      </a>
-      <p><b>{% trans "Identification form" %}</b></p>
-    </div>
-
-    <!-- Rejestracja pestką (chipem) -->
-    <div class="method">
-      <a href="{% url 'enter_badge' %}" class="square-btn">
-        <img src="{% static 'images/chip.png' %}" alt="badge" style="max-width: 80%; max-height: 80%;">
-      </a>
-      <p><b>{% trans "Badge" %}</b></p>
-    </div>
-    <!-- WYJŚCIE (skan breloka na wyjście) -->
-  <div class="method">
-  <a href="{% url 'exit_badge' %}" class="square-btn" style="background-color:#555;">
-    <img src="{% static 'images/exit.png' %}" alt="Exit" style="max-width: 80%; max-height: 80%;">
-  </a>
-  <p><b>{% trans "Exit (only badge)" %}</b></p>
+  {% if unavailable %}
+  <div class="text-center mb-4" style="font-size:1.4rem;color:#a24e6a;">
+    {% trans "The selected registration method is currently unavailable. Please choose another option." %}
   </div>
+  {% endif %}
 
+  <div class="registration-options">
+    {% for tile in tiles %}
+    <div class="method">
+      <a href="{% url tile.url_name %}" class="square-btn"{% if tile.url_name == 'exit_badge' %} style="background-color:#555;"{% endif %}>
+        <img src="{% static tile.icon %}" alt="{{ tile.alt }}" style="max-width: 80%; max-height: 80%;">
+      </a>
+      <p><b>{{ tile.label }}</b></p>
+    </div>
+    {% endfor %}
   </div>
 </div>
 

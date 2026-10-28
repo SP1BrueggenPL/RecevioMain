@@ -1,0 +1,213 @@
+{% extends "base_panel.html" %}
+{% block content %}
+<br><br><br>
+<div class="container">
+  <h1 class="title-single mb-3">Registration methods</h1>
+  <p class="text-muted">
+    Turn kiosk registration methods on/off and manage their optional stages.
+    Click a completion block to edit the text shown to guests on that screen.
+  </p>
+
+  {% for lane in lanes %}
+  <div class="card shadow-sm border-0 mb-4 method-card" data-method-id="{{ lane.method.id }}">
+    <div class="card-header d-flex justify-content-between align-items-center {% if lane.method.is_active %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
+      <span class="fw-semibold">{{ lane.method.label }}</span>
+      <div class="form-check form-switch m-0">
+        <input class="form-check-input method-toggle" type="checkbox" role="switch"
+               data-method-id="{{ lane.method.id }}"
+               {% if lane.method.is_active %}checked{% endif %}>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="method-lane">
+
+        <div class="pipeline-block active">Entry</div>
+        <span class="connector">&#8594;</span>
+
+        {% for stage in lane.stages %}
+          <div class="pipeline-block {% if stage.is_active %}active{% else %}inactive{% endif %} {% if not stage.is_configurable %}locked{% endif %}">
+            <div>{{ stage.label }}</div>
+            <div class="form-check form-switch m-0 mt-1 justify-content-center d-flex">
+              <input class="form-check-input stage-toggle" type="checkbox" role="switch"
+                     data-stage-id="{{ stage.id }}"
+                     {% if stage.is_active %}checked{% endif %}
+                     {% if not stage.is_configurable %}disabled title="This stage is required by this method and cannot be turned off."{% endif %}>
+              {% if not stage.is_configurable %}<span class="ms-1" title="Locked">&#128274;</span>{% endif %}
+            </div>
+          </div>
+          <span class="connector">&#8594;</span>
+        {% endfor %}
+
+        {% if lane.has_signature %}
+          <div class="pipeline-block active">Signature</div>
+          <span class="connector">&#8594;</span>
+          <div class="pipeline-block active completion-block"
+               data-screen="{{ lane.method.slug }}"
+               data-heading="{{ lane.content.heading }}"
+               data-subheading="{{ lane.content.subheading }}"
+               data-body="{{ lane.content.body_no_badge }}"
+               data-footer="{{ lane.content.footer_note }}"
+               data-print="{{ lane.content.print_popup_enabled|yesno:'true,false' }}"
+               data-show-print="{% if lane.method.slug == 'manual' %}true{% else %}false{% endif %}"
+               role="button" tabindex="0">
+            Completion<br><small>(click to edit)</small>
+          </div>
+        {% else %}
+          <div class="pipeline-block active">Done</div>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<style>
+  .method-lane { display: flex; align-items: center; flex-wrap: wrap; gap: 0; }
+  .pipeline-block {
+    min-width: 120px; padding: 10px 14px; border-radius: 10px; text-align: center;
+    color: #fff; font-size: 0.95rem;
+  }
+  .pipeline-block.active { background-color: #2e7d32; }
+  .pipeline-block.inactive { background-color: #9e9e9e; }
+  .pipeline-block.locked { border: 2px dashed rgba(255,255,255,0.6); }
+  .pipeline-block.completion-block { cursor: pointer; }
+  .pipeline-block.completion-block:hover { filter: brightness(1.1); }
+  .connector { font-size: 1.4rem; color: #999; margin: 0 8px; }
+</style>
+
+<!-- Edit modal (shared by every completion block) -->
+<div class="modal fade" id="completionEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit completion screen</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ce-screen">
+        <div class="mb-2">
+          <label class="form-label">Heading</label>
+          <input type="text" id="ce-heading" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Subheading</label>
+          <input type="text" id="ce-subheading" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Text when no badge is required</label>
+          <textarea id="ce-body" class="form-control" rows="2"></textarea>
+        </div>
+        <div class="mb-2">
+          <label class="form-label">Footer note</label>
+          <input type="text" id="ce-footer" class="form-control">
+        </div>
+        <div class="form-check" id="ce-print-wrap" style="display:none;">
+          <input type="checkbox" class="form-check-input" id="ce-print">
+          <label class="form-check-label" for="ce-print">
+            Automatically open the badge print dialog on this screen
+          </label>
+        </div>
+        <div id="ce-status" class="small mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="ce-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  const csrftoken = '{{ csrf_token }}';
+
+  function postForm(url, data) {
+    const formData = new FormData();
+    formData.append('csrfmiddlewaretoken', csrftoken);
+    Object.keys(data).forEach(k => formData.append(k, data[k]));
+    return fetch(url, { method: 'POST', body: formData }).then(r => r.json());
+  }
+
+  document.querySelectorAll('.method-toggle').forEach(function (input) {
+    input.addEventListener('change', function () {
+      const checked = input.checked;
+      postForm("{% url 'registration_method_toggle' %}", {
+        method_id: input.dataset.methodId,
+        is_active: checked ? 'true' : 'false',
+      }).then(function (res) {
+        if (!res.ok) { input.checked = !checked; return; }
+        const header = input.closest('.card-header');
+        header.classList.toggle('bg-success', res.is_active);
+        header.classList.toggle('bg-secondary', !res.is_active);
+      }).catch(function () { input.checked = !checked; });
+    });
+  });
+
+  document.querySelectorAll('.stage-toggle').forEach(function (input) {
+    input.addEventListener('change', function () {
+      const checked = input.checked;
+      const block = input.closest('.pipeline-block');
+      postForm("{% url 'registration_stage_toggle' %}", {
+        stage_id: input.dataset.stageId,
+        is_active: checked ? 'true' : 'false',
+      }).then(function (res) {
+        if (!res.ok) { input.checked = !checked; return; }
+        block.classList.toggle('active', res.is_active);
+        block.classList.toggle('inactive', !res.is_active);
+      }).catch(function () { input.checked = !checked; });
+    });
+  });
+
+  const modalEl = document.getElementById('completionEditModal');
+  const modal = new bootstrap.Modal(modalEl);
+  let activeBlock = null;
+
+  document.querySelectorAll('.completion-block').forEach(function (block) {
+    block.addEventListener('click', function () {
+      activeBlock = block;
+      document.getElementById('ce-screen').value = block.dataset.screen;
+      document.getElementById('ce-heading').value = block.dataset.heading || '';
+      document.getElementById('ce-subheading').value = block.dataset.subheading || '';
+      document.getElementById('ce-body').value = block.dataset.body || '';
+      document.getElementById('ce-footer').value = block.dataset.footer || '';
+      document.getElementById('ce-status').textContent = '';
+      const printWrap = document.getElementById('ce-print-wrap');
+      if (block.dataset.showPrint === 'true') {
+        printWrap.style.display = '';
+        document.getElementById('ce-print').checked = block.dataset.print === 'true';
+      } else {
+        printWrap.style.display = 'none';
+      }
+      modal.show();
+    });
+  });
+
+  document.getElementById('ce-save').addEventListener('click', function () {
+    const statusEl = document.getElementById('ce-status');
+    statusEl.textContent = 'Saving...';
+    const payload = {
+      screen: document.getElementById('ce-screen').value,
+      heading: document.getElementById('ce-heading').value,
+      subheading: document.getElementById('ce-subheading').value,
+      body_no_badge: document.getElementById('ce-body').value,
+      footer_note: document.getElementById('ce-footer').value,
+    };
+    if (document.getElementById('ce-print-wrap').style.display !== 'none') {
+      payload.print_popup_enabled = document.getElementById('ce-print').checked ? 'true' : 'false';
+    }
+    postForm("{% url 'completion_content_save' %}", payload).then(function (res) {
+      if (!res.ok) { statusEl.textContent = 'Error saving.'; return; }
+      if (activeBlock) {
+        activeBlock.dataset.heading = payload.heading;
+        activeBlock.dataset.subheading = payload.subheading;
+        activeBlock.dataset.body = payload.body_no_badge;
+        activeBlock.dataset.footer = payload.footer_note;
+        if (payload.print_popup_enabled !== undefined) activeBlock.dataset.print = payload.print_popup_enabled;
+      }
+      statusEl.textContent = 'Saved.';
+    }).catch(function () { statusEl.textContent = 'Network error.'; });
+  });
+});
+</script>
+{% endblock %}
