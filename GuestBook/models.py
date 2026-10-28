@@ -256,6 +256,90 @@ class KioskSettings(models.Model):
         return obj
 
 
+class RegistrationMethod(models.Model):
+    """One row per kiosk 'choose method' tile. Controls whether the tile shows
+    and whether its entry URL is reachable at all (see views._require_method_active)."""
+    SLUG_CHOICES = [
+        ('manual', 'Identification form'),
+        ('badge', 'Badge'),
+        ('code', 'Registration code'),
+        ('exit', 'Exit (badge scan)'),
+    ]
+    slug = models.CharField(max_length=20, choices=SLUG_CHOICES, unique=True)
+    label = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=False)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+
+    class Meta:
+        ordering = ['sort_order', 'id']
+        verbose_name = 'Registration method'
+
+    def __str__(self):
+        return self.label or self.slug
+
+
+class RegistrationStage(models.Model):
+    """An optional sub-flow within a method (currently only the safety/BHP
+    sub-flow) that can be turned on/off. is_configurable=False means the stage
+    is shown in the SupportCenter diagram for visibility but cannot be toggled
+    (see views.registration_stage_toggle)."""
+    STAGE_CHOICES = [
+        ('safety_subflow', 'Safety / BHP sub-flow'),
+    ]
+    method = models.ForeignKey(RegistrationMethod, on_delete=models.CASCADE, related_name='stages')
+    stage_key = models.CharField(max_length=30, choices=STAGE_CHOICES)
+    label = models.CharField(max_length=150)
+    is_active = models.BooleanField(default=True)
+    is_configurable = models.BooleanField(default=True)
+    sort_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = [('method', 'stage_key')]
+        ordering = ['method_id', 'sort_order']
+        verbose_name = 'Registration stage'
+
+    def __str__(self):
+        return f"{self.method.slug} / {self.label}"
+
+
+class CompletionScreenContent(models.Model):
+    """Staff-editable text shown on the post-registration 'complete' screens,
+    plus the printer-popup toggle for the manual flow (no printer at the kiosk
+    anymore — see kiosk/complete.html)."""
+    SCREEN_CHOICES = [
+        ('manual', 'Identification form – completion'),
+        ('badge', 'Badge – completion'),
+        ('code', 'Registration code – completion'),
+    ]
+    screen = models.CharField(max_length=20, choices=SCREEN_CHOICES, unique=True)
+    heading = models.CharField(max_length=200, blank=True, default='')
+    subheading = models.CharField(max_length=300, blank=True, default='')
+    body_no_badge = models.TextField(blank=True, default='')
+    footer_note = models.CharField(max_length=300, blank=True, default='')
+    print_popup_enabled = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+
+    class Meta:
+        verbose_name = 'Completion screen content'
+
+    def __str__(self):
+        return self.get_screen_display()
+
+    @classmethod
+    def get_for(cls, screen: str) -> "CompletionScreenContent":
+        obj, _ = cls.objects.get_or_create(screen=screen)
+        return obj
+
+
 class Package(models.Model):
     class Status(models.TextChoices):
         IN_BOX = "in_box", "W paczkomacie"

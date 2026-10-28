@@ -33,15 +33,15 @@ urlpatterns = [
     path('signature_trusted/<str:visitor_id>/', views.signature_trusted_view, name='signature_trusted'),
     path('complete_trusted/<str:visitor_id>/', views.finish_registration_trusted_view, name='finish_registration_trusted'),
 
-    # path('enter_code/', views.enter_code_view, name='enter_code'),  # Reservations disabled
-    # path('enter_visitor_id_for_code/<str:visitor_id>/', views.enter_visitor_id_for_code, name='enter_visitor_id_for_code'),  # Reservations disabled
-    # path('signature_code/', views.signature_from_code_view, name='signature_from_code'),  # Reservations disabled
-    # path('safety_pdf_code/', views.safety_from_code_view, name='safety_from_code'),  # Reservations disabled
-    # path('bhp_question1_code/', views.bhp_question1_from_code_view, name='bhp_question1_from_code'),  # Reservations disabled
-    # path('bhp_question2_code/', views.bhp_question2_from_code_view, name='bhp_question2_from_code'),  # Reservations disabled
-    # path('bhp_question3_code/', views.bhp_question3_from_code_view, name='bhp_question3_from_code'),  # Reservations disabled
-    # path('finalize_code/', views.finalize_from_code_view, name='finalize_from_code'),  # Reservations disabled
-    # path("complete_code/<int:reservation_id>/", views.complete_code_view, name="complete_code"),  # Reservations disabled
+    path('enter_code/', views.enter_code_view, name='enter_code'),
+    path('enter_visitor_id_for_code/<str:visitor_id>/', views.enter_visitor_id_for_code, name='enter_visitor_id_for_code'),
+    path('signature_code/', views.signature_from_code_view, name='signature_from_code'),
+    path('safety_pdf_code/', views.safety_from_code_view, name='safety_from_code'),
+    path('bhp_question1_code/', views.bhp_question1_from_code_view, name='bhp_question1_from_code'),
+    path('bhp_question2_code/', views.bhp_question2_from_code_view, name='bhp_question2_from_code'),
+    path('bhp_question3_code/', views.bhp_question3_from_code_view, name='bhp_question3_from_code'),
+    path('finalize_code/', views.finalize_from_code_view, name='finalize_from_code'),
+    path("complete_code/<int:reservation_id>/", views.complete_code_view, name="complete_code"),
 
     path('kiosk/exit/', views.exit_badge_view, name='exit_badge'),
     path("kiosk/exit/done/<str:visitor_id>/", views.exit_done_view, name="exit_done"),
@@ -109,6 +109,11 @@ urlpatterns = [
     path("support/import/senders/", views.helpdesk_import_senders, name="helpdesk_import_senders"),
     path("support/import/recipients/", views.helpdesk_import_recipients, name="helpdesk_import_recipients"),
     path("support/package/<int:pk>/edit/", views.helpdesk_package_edit, name="helpdesk_package_edit"),
+    path("support/reservations/new/", views.reservation_code_create_view, name="reservation_code_create"),
+    path("support/methods/", views.registration_methods_panel, name="registration_methods_panel"),
+    path("support/methods/toggle-method/", views.registration_method_toggle, name="registration_method_toggle"),
+    path("support/methods/toggle-stage/", views.registration_stage_toggle, name="registration_stage_toggle"),
+    path("support/methods/save-content/", views.completion_content_save, name="completion_content_save"),
 
     path("admin/test-email/", views.test_email_view, name="test_email"),
 

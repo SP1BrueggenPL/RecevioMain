@@ -15,11 +15,11 @@
 
 <div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
   <h1 style="font-size: 3rem; margin-bottom: 1.5rem;">
-    {% trans "Your registration has been successfully completed." %}
+    {{ content.heading|default:_("Your registration has been successfully completed.") }}
   </h1>
 
   <h3 style="font-size: 2rem; margin-bottom: 2rem;">
-    {% trans "The host has been informed about the completion of your registration" %}
+    {{ content.subheading|default:_("The host has been informed about the completion of your registration") }}
   </h3>
 
   {% if is_production and badge_color %}
@@ -32,12 +32,12 @@
     </p>
   {% else %}
     <p style="font-size: 2rem; margin-bottom: 2rem;">
-      {% trans "A badge is not required for visitors who will not access the production area." %}
+      {{ content.body_no_badge|default:_("A badge is not required for visitors who will not access the production area.") }}
     </p>
   {% endif %}
 
   <p style="margin-top: 2rem; font-style: italic; font-size: 1.8rem; color: #514b51;">
-    {% trans "You will be redirected to the start screen in a moment..." %}
+    {{ content.footer_note|default:_("You will be redirected to the start screen in a moment...") }}
   </p>
   <!-- ✅ Przycisk powrotu -->
   <div style="margin-top: 3rem;">

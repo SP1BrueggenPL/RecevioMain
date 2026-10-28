@@ -212,6 +212,35 @@ class ReservationForm(forms.ModelForm):
         return cleaned_data
 
 
+class ReservationCodeIssueForm(forms.ModelForm):
+    """Minimal reservation form used to issue a kiosk registration code without
+    any SMS/email delivery wired in (SupportCenter -> Registration methods)."""
+    visit_purpose_choice = forms.ChoiceField(
+        required=False,
+        label=_("Purpose of Visit"),
+        choices=VISIT_PURPOSE_CHOICES_ORIGINAL,
+        widget=forms.Select(attrs={'class': 'form-control'})
+    )
+
+    class Meta:
+        model = Reservation
+        fields = [
+            'visitor_first_name', 'visitor_last_name', 'phone',
+            'company', 'host', 'visit_purpose_choice', 'other_purpose',
+            'factory', 'date',
+        ]
+        widgets = {
+            'visitor_first_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'visitor_last_name': forms.TextInput(attrs={'class': 'form-control'}),
+            'phone': forms.TextInput(attrs={'class': 'form-control'}),
+            'company': forms.Select(attrs={'class': 'form-control'}),
+            'host': forms.Select(attrs={'class': 'form-control'}),
+            'other_purpose': forms.TextInput(attrs={'class': 'form-control'}),
+            'factory': forms.CheckboxInput(),
+            'date': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+        }
+
+
 class BadgeIDForm(forms.Form):
     badge_id = forms.CharField(
         label=_("Enter your badge ID"),

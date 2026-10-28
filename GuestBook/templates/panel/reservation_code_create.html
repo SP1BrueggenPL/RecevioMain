@@ -1,0 +1,106 @@
+{% extends "base_panel.html" %}
+{% block content %}
+<br><br><br>
+<div class="container">
+  <h1 class="title-single mb-3">Registration codes</h1>
+
+  <div class="row g-3">
+    <!-- Formularz wydania kodu -->
+    <div class="col-lg-5">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-primary text-white fw-semibold">Issue a registration code</div>
+        <div class="card-body">
+          <form method="post" class="row g-2" autocomplete="off">
+            {% csrf_token %}
+            <div class="col-12">
+              <label class="form-label">First name</label>
+              {{ form.visitor_first_name }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Last name</label>
+              {{ form.visitor_last_name }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Phone</label>
+              {{ form.phone }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Company</label>
+              {{ form.company }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Host</label>
+              {{ form.host }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Purpose of visit</label>
+              {{ form.visit_purpose_choice }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Other purpose</label>
+              {{ form.other_purpose }}
+            </div>
+            <div class="col-12">
+              <label class="form-label">Visit date</label>
+              {{ form.date }}
+            </div>
+            <div class="col-12 form-check">
+              {{ form.factory }}
+              <label class="form-check-label" for="{{ form.factory.id_for_label }}">
+                Visit includes the production area
+              </label>
+            </div>
+            {% if form.non_field_errors or form.errors %}
+              <div class="col-12">
+                <div class="alert alert-danger py-2 mb-0">Please check the form for errors.</div>
+              </div>
+            {% endif %}
+            <div class="col-12 mt-2">
+              <button class="btn btn-primary">Generate code</button>
+            </div>
+          </form>
+          <p class="text-muted small mt-3 mb-0">
+            No SMS or e-mail is sent automatically — relay the generated code to the guest yourself.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Ostatnio wygenerowane kody -->
+    <div class="col-lg-7">
+      <div class="card shadow-sm border-0">
+        <div class="card-header bg-light fw-semibold">Recently issued codes</div>
+        <ul class="list-group list-group-flush">
+          {% for c in recent_codes %}
+            <li class="list-group-item">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <span class="fw-semibold" style="font-size:1.2rem; letter-spacing:2px;">{{ c.code }}</span>
+                  <span class="text-muted ms-2">
+                    {{ c.reservation.visitor_first_name }} {{ c.reservation.visitor_last_name }}
+                  </span>
+                </div>
+                <span class="badge bg-secondary">{{ c.usage_count }}/{{ c.max_uses }} used</span>
+              </div>
+              <div class="text-muted small mt-1">
+                Host: {{ c.reservation.host|default:"—" }} · Created: {{ c.created_at|date:"Y-m-d H:i" }}
+              </div>
+            </li>
+          {% empty %}
+            <li class="list-group-item text-muted">No codes issued yet</li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('form .form-control, form input, form select').forEach(el => {
+      if (!el.classList.contains('form-control') && el.tagName === 'INPUT' && el.type !== 'checkbox') el.classList.add('form-control');
+      if (el.tagName === 'SELECT') el.classList.add('form-select');
+    });
+  });
+</script>
+{% endblock %}
