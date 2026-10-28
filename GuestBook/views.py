@@ -2954,8 +2954,14 @@ def _can_boxflow(user):
 def _can_helpdesk(user):
     return user.is_authenticated and user.groups.filter(name__in=["Recevio_Helpdesk", "SupportCenter"]).exists()
 
+def _can_issue_reservation_codes(user):
+    return user.is_authenticated and user.groups.filter(
+        name__in=["Recevio_ReservationCodes", "Recevio_Helpdesk", "SupportCenter"]
+    ).exists()
+
 boxflow_required = user_passes_test(_can_boxflow)
 helpdesk_required = user_passes_test(_can_helpdesk)
+reservation_codes_required = user_passes_test(_can_issue_reservation_codes)
 
 
 # --- AI Label Scan ---
@@ -3784,7 +3790,7 @@ def helpdesk_package_edit(request, pk):
 
 
 @login_required
-@helpdesk_required
+@reservation_codes_required
 def reservation_code_create_view(request):
     """Issue a Reservation + ReservationCode for the kiosk 'registration code'
     method, without any SMS/email delivery (staff relay the code themselves)."""

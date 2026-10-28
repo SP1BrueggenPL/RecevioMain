@@ -214,6 +214,22 @@ class RegistrationMethodsPanelPermissionTests(KioskRoutingTestCase):
         response = self.client.get(reverse("reservation_code_create"))
         self.assertEqual(response.status_code, 302)
 
+    def test_plain_user_cannot_create_reservation_code(self):
+        User.objects.create_user("plainuser2", password="pw")
+        self.client.login(username="plainuser2", password="pw")
+        response = self.client.get(reverse("reservation_code_create"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_dedicated_group_can_create_reservation_code(self):
+        """Registration codes has its own visibility group, independent of
+        Recevio_Helpdesk (per user request: own nav item, own group)."""
+        group, _ = Group.objects.get_or_create(name="Recevio_ReservationCodes")
+        user = User.objects.create_user("codeissuer", password="pw")
+        user.groups.add(group)
+        self.client.force_login(user)
+        response = self.client.get(reverse("reservation_code_create"))
+        self.assertEqual(response.status_code, 200)
+
 
 class CompletionScreenContentTemplateTests(KioskRoutingTestCase):
     def test_print_popup_hidden_by_default(self):

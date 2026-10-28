@@ -149,9 +149,15 @@
                     <li><a class="dropdown-item" href="{% url 'test_email' %}">Test e-mail</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="{% url 'registration_methods_panel' %}">Registration methods</a></li>
-                    <li><a class="dropdown-item" href="{% url 'reservation_code_create' %}">Registration codes</a></li>
 
                 </ul>
+              </li>
+            {% endif %}
+
+            {# ——— Registration codes: own top-bar item, separate visibility group ——— #}
+            {% if user|has_group:"Recevio_ReservationCodes" or user|has_group:"Recevio_Helpdesk" %}
+              <li class="nav-item">
+                <a class="nav-link" href="{% url 'reservation_code_create' %}">Registration codes</a>
               </li>
             {% endif %}
 
