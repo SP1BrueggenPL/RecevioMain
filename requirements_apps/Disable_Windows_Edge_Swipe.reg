@@ -1,0 +1,12 @@
+Windows Registry Editor Version 5.00
+
+; Recevio kiosk - blokada systemowego gestu "swipe od krawedzi ekranu" (Windows 10/11),
+; ktory na urzadzeniach dotykowych pozwala przeciagnieciem od gory/boku ekranu
+; przywolac pasek/przelacznik aplikacji ponad oknem przegladarki w trybie kiosk.
+; Wymaga uprawnien administratora: kliknij prawym -> "Scal" (Merge), potem wyloguj/zaloguj
+; ponownie (lub zrestartuj komputer), zeby zmiana zaczela dzialac.
+;
+; Zrodlo: https://learn.microsoft.com/en-us/windows/client-management/mdm/policy-csp-lockdown (AllowEdgeSwipe)
+
+[HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\EdgeUI]
+"AllowEdgeSwipe"=dword:00000000
