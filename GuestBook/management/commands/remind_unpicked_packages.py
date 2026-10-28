@@ -41,6 +41,7 @@ class Command(BaseCommand):
                     "sender": getattr(p.sender, "name", ""),
                     "delivered_at": p.delivered_at,
                     "comment": p.staff_comment,
+                    "location_phrase": p.location_email_phrase(),
                 }
                 for p in pkgs
             ]

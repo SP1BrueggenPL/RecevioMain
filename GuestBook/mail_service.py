@@ -99,17 +99,22 @@ def send_pending_package_reminder(email: str, packages_info: list) -> str:
     Send the "package(s) waiting for pickup" reminder e-mail — the same content
     used by the automatic 48h reminder job and the manual "send reminder" button
     on the package detail page.
-    packages_info: list of dicts with keys "code", "sender", "delivered_at", "comment" (optional).
+    packages_info: list of dicts with keys "code", "sender", "delivered_at",
+    "comment" (optional), "location_phrase" (optional, e.g. "recepcji biura
+    głównego Brüggen" — see Package.location_email_phrase()).
     Returns 'sent' | 'skipped' | 'error' (see send_via_acs).
     """
+    default_location = "recepcji biura głównego Brüggen"
     lines = "\n".join(
-        f"- {p['code']} (nadawca: {p['sender']}, dostarczono: {p['delivered_at']:%d.%m.%Y %H:%M})"
+        f"- {p['code']} (nadawca: {p['sender']}, dostarczono: {p['delivered_at']:%d.%m.%Y %H:%M}, "
+        f"paczkomat: {p.get('location_phrase', default_location)})"
         + (f" — {p['comment']}" if p.get("comment") else "")
         for p in packages_info
     )
     subject = (
-        f"Przypomnienie: {len(packages_info)} paczki czekają na odbiór"
-        if len(packages_info) > 1 else f"Przypomnienie: paczka {packages_info[0]['code']} czeka na odbiór"
+        f"Recepcja Brüggen - przypomnienie: {len(packages_info)} paczki czekają na odbiór"
+        if len(packages_info) > 1
+        else f"Recepcja Brüggen - przypomnienie: paczka {packages_info[0]['code']} czeka na odbiór"
     )
     body = (
         f"Dzień dobry,\n\n"

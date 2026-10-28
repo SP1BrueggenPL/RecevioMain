@@ -302,9 +302,16 @@ class PackageForm(forms.ModelForm):
         widget=forms.Textarea(attrs={"class": "form-control", "rows": 2}),
     )
 
+    location = forms.ChoiceField(
+        label="Parcel locker location",
+        choices=Package.Location.choices,
+        initial=Package.Location.MAIN_OFFICE,
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+
     class Meta:
         model = Package
-        fields = ["delivered_at", "sender", "new_sender", "recipient", "label_code", "staff_comment"]
+        fields = ["delivered_at", "sender", "new_sender", "recipient", "label_code", "staff_comment", "location"]
 
     def clean(self):
         data = super().clean()

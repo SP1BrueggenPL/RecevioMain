@@ -3184,6 +3184,25 @@ def boxflow_scan_label(request):
     return render(request, "boxflow/scan_label.html", {"form": LabelScanForm()})
 
 
+def _build_package_registered_email(pkg):
+    """Subject/body for the e-mail sent to a package's recipient when it's
+    registered. Split out from boxflow_add_pack so it can be unit tested
+    without touching the fire-and-forget send thread."""
+    subject = f"Recepcja Brüggen - paczka w paczkomacie: {pkg.code}"
+    body = (
+        f"Dzień dobry,\n\n"
+        f"Dla odbiorcy: {getattr(pkg.recipient, 'name', '')} zarejestrowano paczkę "
+        f"w paczkomacie {pkg.location_email_phrase()}.\n"
+        f"Kod: {pkg.code}\n"
+        f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
+        f"Dostarczono: {pkg.delivered_at:%d.%m.%Y %H:%M}\n"
+    )
+    if pkg.staff_comment:
+        body += f"Komentarz recepcji: {pkg.staff_comment}\n"
+    body += "\nProsimy o odbiór paczki w ciągu 48h.\n\n"
+    return subject, body
+
+
 # views.py
 @login_required
 @boxflow_required
@@ -3220,19 +3239,7 @@ def boxflow_add_pack(request):
             # 4) E-mail do odbiorcy — fire-and-forget w tle, nie blokuje odpowiedzi
             if getattr(pkg.recipient, "email", None):
                 _email = pkg.recipient.email
-                _subject = f"Paczka w paczkomacie: {pkg.code}"
-                _body = (
-                    f"Dzień dobry,\n\n"
-                    f"Dla odbiorcy: {getattr(pkg.recipient, 'name', '')} zarejestrowano paczkę w paczkomacie.\n"
-                    f"Kod: {pkg.code}\n"
-                    f"Nadawca: {getattr(pkg.sender, 'name', '')}\n"
-                    f"Dostarczono: {pkg.delivered_at:%d.%m.%Y %H:%M}\n"
-                )
-                if pkg.staff_comment:
-                    _body += f"Komentarz recepcji: {pkg.staff_comment}\n"
-                _body += (
-                    "\nProsimy o odbiór paczki w ciągu 48h.\n\n"
-                )
+                _subject, _body = _build_package_registered_email(pkg)
                 Thread(
                     target=send_email_with_timeout,
                     args=(_email, _subject, _body),
@@ -3418,6 +3425,7 @@ def boxflow_send_overdue_reminders(request):
                 "sender": getattr(p.sender, "name", ""),
                 "delivered_at": p.delivered_at,
                 "comment": p.staff_comment,
+                "location_phrase": p.location_email_phrase(),
             }
             for p in pkgs
         ]
@@ -3653,6 +3661,7 @@ def boxflow_pack_detail(request, pk):
             "sender": getattr(pkg.sender, "name", ""),
             "delivered_at": pkg.delivered_at,
             "comment": pkg.staff_comment,
+            "location_phrase": pkg.location_email_phrase(),
         }])
         pkg.reminder_sent_at = timezone.now()
         pkg.save(update_fields=["reminder_sent_at"])

@@ -20,7 +20,8 @@ from GuestBook.models import (
     Sender,
     Visitor,
 )
-from GuestBook.views import _match_masked_name, _mark_package_issued
+from GuestBook.mail_service import send_pending_package_reminder
+from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
 
 
 class MatchMaskedNameLegalSuffixTests(TestCase):
@@ -67,6 +68,83 @@ class MarkPackageIssuedTests(TestCase):
         self.assertIsNone(self.pkg.collected_by)
         self.assertEqual(self.pkg.collected_by_name, "Jan Kowalski")
         self.assertEqual(who, "Jan Kowalski")
+
+
+class PackageLocationTests(TestCase):
+    def setUp(self):
+        self.sender = Sender.objects.create(name="Test Sender")
+        self.recipient = Recipient.objects.create(name="Izabela Benicka", email="r@example.com")
+
+    def test_defaults_to_main_office(self):
+        pkg = Package.objects.create(sender=self.sender, recipient=self.recipient, code="BXDEFAULT1")
+        self.assertEqual(pkg.location, Package.Location.MAIN_OFFICE)
+        self.assertEqual(pkg.location_email_phrase(), "recepcji biura głównego Brüggen")
+
+    def test_social_building_phrase(self):
+        pkg = Package.objects.create(
+            sender=self.sender, recipient=self.recipient, code="BXSOCIAL1",
+            location=Package.Location.SOCIAL_BUILDING,
+        )
+        self.assertEqual(pkg.location_email_phrase(), "recepcji budynku socjalnego Brüggen")
+
+
+class PackageRegisteredEmailTests(TestCase):
+    def setUp(self):
+        self.sender = Sender.objects.create(name="Allegro")
+        self.recipient = Recipient.objects.create(name="Izabela Benicka", email="r@example.com")
+
+    def test_main_office_subject_and_body(self):
+        pkg = Package.objects.create(
+            sender=self.sender, recipient=self.recipient, code="BXC2URAHUB",
+        )
+        subject, body = _build_package_registered_email(pkg)
+        self.assertEqual(subject, "Recepcja Brüggen - paczka w paczkomacie: BXC2URAHUB")
+        self.assertIn(
+            "Dla odbiorcy: Izabela Benicka zarejestrowano paczkę w paczkomacie "
+            "recepcji biura głównego Brüggen.",
+            body,
+        )
+
+    def test_social_building_subject_and_body(self):
+        pkg = Package.objects.create(
+            sender=self.sender, recipient=self.recipient, code="BXC2URAHUB",
+            location=Package.Location.SOCIAL_BUILDING,
+        )
+        subject, body = _build_package_registered_email(pkg)
+        self.assertEqual(subject, "Recepcja Brüggen - paczka w paczkomacie: BXC2URAHUB")
+        self.assertIn(
+            "Dla odbiorcy: Izabela Benicka zarejestrowano paczkę w paczkomacie "
+            "recepcji budynku socjalnego Brüggen.",
+            body,
+        )
+
+
+class PendingPackageReminderEmailTests(TestCase):
+    def test_reminder_includes_location_phrase(self):
+        status = send_pending_package_reminder("r@example.com", [{
+            "code": "BXC2URAHUB",
+            "sender": "Allegro",
+            "delivered_at": timezone.now(),
+            "comment": "",
+            "location_phrase": "recepcji budynku socjalnego Brüggen",
+        }])
+        self.assertEqual(status, "sent")
+        from django.core import mail
+        self.assertEqual(len(mail.outbox), 1)
+        sent = mail.outbox[0]
+        self.assertTrue(sent.subject.startswith("Recepcja Brüggen -"))
+        self.assertIn("paczkomat: recepcji budynku socjalnego Brüggen", sent.body)
+
+    def test_reminder_falls_back_to_main_office_phrase_when_missing(self):
+        status = send_pending_package_reminder("r@example.com", [{
+            "code": "BXNOPHRASE",
+            "sender": "Allegro",
+            "delivered_at": timezone.now(),
+            "comment": "",
+        }])
+        self.assertEqual(status, "sent")
+        from django.core import mail
+        self.assertIn("paczkomat: recepcji biura głównego Brüggen", mail.outbox[-1].body)
 
 
 class RemindUnpickedPackagesCommandTests(TestCase):
