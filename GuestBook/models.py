@@ -345,6 +345,18 @@ class Package(models.Model):
         IN_BOX = "in_box", "W paczkomacie"
         ISSUED = "issued", "Wydana"
 
+    class Location(models.TextChoices):
+        MAIN_OFFICE = "main_office", "Recepcja biura głównego"
+        SOCIAL_BUILDING = "social_building", "Recepcja budynku socjalnego"
+
+    # Genitive phrasing for the "w paczkomacie ..." sentence in e-mails —
+    # kept separate from the Location choice labels above, which are the
+    # nominative form shown in the dropdown.
+    LOCATION_EMAIL_PHRASES = {
+        Location.MAIN_OFFICE: "recepcji biura głównego Brüggen",
+        Location.SOCIAL_BUILDING: "recepcji budynku socjalnego Brüggen",
+    }
+
     delivered_at = models.DateTimeField("Delivered at", default=timezone.now)
 
     # teraz FK zamiast czystego tekstu
@@ -354,6 +366,13 @@ class Package(models.Model):
     code = models.CharField("Code", max_length=32, unique=True, db_index=True)
     label_code = models.CharField("Package number (from label)", max_length=64, blank=True, default="")
     status = models.CharField(max_length=16, choices=Status.choices, default=Status.IN_BOX)
+    location = models.CharField(
+        "Parcel locker location", max_length=20,
+        choices=Location.choices, default=Location.MAIN_OFFICE,
+    )
+
+    def location_email_phrase(self) -> str:
+        return self.LOCATION_EMAIL_PHRASES.get(self.location, self.LOCATION_EMAIL_PHRASES[self.Location.MAIN_OFFICE])
 
     staff_comment = models.TextField("Reception comment", blank=True, default="")
     label_photo = models.ImageField(upload_to="package_labels/", null=True, blank=True)
