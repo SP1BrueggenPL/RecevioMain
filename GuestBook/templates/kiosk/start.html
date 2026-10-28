@@ -78,7 +78,7 @@
     <!-- Step 1: password -->
     <div id="ks-step-password">
       <p class="text-muted">Enter admin password to continue.</p>
-      <input type="password" id="ks-password" class="form-control mb-2" placeholder="Password">
+      <input type="password" id="ks-password" class="form-control mb-2 kb-alpha" placeholder="Password">
       <div id="ks-password-error" class="text-danger small mb-2" style="display:none;">Wrong password.</div>
       <button class="btn btn-primary w-100" onclick="ksCheckPassword()">Continue</button>
       <button class="btn btn-secondary w-100 mt-2" onclick="ksClose()">Cancel</button>
@@ -89,11 +89,11 @@
       <p class="text-muted small">Printer settings</p>
       <div class="mb-3">
         <label class="form-label">Printer IP / Hostname</label>
-        <input type="text" id="ks-printer-address" class="form-control" placeholder="10.30.40.150">
+        <input type="text" id="ks-printer-address" class="form-control kb-alpha" placeholder="10.30.40.150">
       </div>
       <div class="mb-3">
         <label class="form-label">Printer Port</label>
-        <input type="number" id="ks-printer-port" class="form-control" placeholder="9100">
+        <input type="text" inputmode="numeric" id="ks-printer-port" class="form-control kb-alpha" placeholder="9100">
       </div>
       <div id="ks-save-status" class="mb-2 small"></div>
       <button class="btn btn-success w-100" onclick="ksSave()">Save</button>
