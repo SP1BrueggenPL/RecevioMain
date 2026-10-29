@@ -298,11 +298,12 @@ class RegistrationMethodsPanelPermissionTests(KioskRoutingTestCase):
         response = self.client.get(reverse("reservation_code_create"))
         self.assertNotEqual(response.status_code, 200)
 
-    def test_dedicated_group_can_create_reservation_code(self):
-        """Registration codes has its own visibility group, independent of
-        Recevio_Helpdesk (per user request: own nav item, own group)."""
-        group, _ = Group.objects.get_or_create(name="Recevio_ReservationCodes")
-        user = User.objects.create_user("codeissuer", password="pw")
+    def test_reception_group_can_create_reservation_code(self):
+        """Reception runs this page day to day — reuses the existing
+        Recevio_Reception group (already manageable from the Users page),
+        independent of Recevio_Helpdesk."""
+        group, _ = Group.objects.get_or_create(name="Recevio_Reception")
+        user = User.objects.create_user("receptionuser", password="pw")
         user.groups.add(group)
         self.client.force_login(user)
         response = self.client.get(reverse("reservation_code_create"))
