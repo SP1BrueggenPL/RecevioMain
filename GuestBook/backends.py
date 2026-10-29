@@ -1,10 +1,35 @@
 from ldap3 import Server, Connection, NONE, SUBTREE
+from django.contrib.auth.hashers import check_password
 from django.contrib.auth.models import User, Group
 from django.conf import settings
 from .models import AdminProfile
 
 LDAP_CONNECT_TIMEOUT = 5   # seconds to establish TCP connection
 LDAP_RECEIVE_TIMEOUT = 10  # seconds to wait for LDAP response
+
+
+class ChipPinBackend:
+    """Staff login via a 5-digit chip number + a 6-digit authorization code
+    (PIN) the user sets on first login — see AdminProfile.chip_number/pin_hash
+    and the `login` view in views.py. Only matches when called with
+    chip_number/pin kwargs, so it doesn't interfere with ModelBackend's
+    username/password calls (e.g. the Django admin login at /nimda/)."""
+
+    def authenticate(self, request, chip_number=None, pin=None, **kwargs):
+        if not chip_number or not pin:
+            return None
+        profile = AdminProfile.objects.select_related('user').filter(chip_number=chip_number).first()
+        if not profile or not profile.pin_hash:
+            return None
+        if not check_password(pin, profile.pin_hash):
+            return None
+        return profile.user
+
+    def get_user(self, user_id):
+        try:
+            return User.objects.get(pk=user_id)
+        except User.DoesNotExist:
+            return None
 
 
 class LDAPBackend:

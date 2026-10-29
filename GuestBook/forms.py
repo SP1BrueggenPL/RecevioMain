@@ -4,15 +4,6 @@ from .models import *
 from django.contrib.auth.models import User
 from django.utils.translation import gettext_lazy as _
 
-class UserLoginForm(forms.ModelForm):
-    username = forms.CharField(widget=forms.TextInput(attrs={'id': 'floatingInput', 'class': 'form-control mb-3'}), required=True)
-    password = forms.CharField(widget=forms.PasswordInput(attrs={'id': 'floatingPassword', 'class': 'form-control mb-3'}), required=True)
-    remember_me = forms.BooleanField(required=False, widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}))
-
-    class Meta:
-        model = User
-        fields = ['username','password']
-
 VISIT_PURPOSE_CHOICES_ORIGINAL = [
     ('', '--- Select ---'),
     ('Job interview', 'Job interview'),

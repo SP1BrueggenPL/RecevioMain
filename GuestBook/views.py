@@ -16,7 +16,6 @@ from .utils import generate_bhp_pdf
 from django.contrib.auth.decorators import user_passes_test
 from .task import schedule_recurring_tasks
 from django.contrib import auth
-from .forms import UserLoginForm
 from .utils import clean_next_url
 from django.http import JsonResponse
 # from .sms_gateway import SMSGateway  # Replaced by email notifications
@@ -244,55 +243,91 @@ def index_redirect(request):
 
 from django.contrib import messages
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.contrib.auth.hashers import make_password
+import re
 
 def clean_next_url(next_url: str) -> str:
     # Twoja implementacja – przykład kontroli bezpieczeństwa
     return next_url if url_has_allowed_host_and_scheme(next_url, allowed_hosts=None) else ''
 
+PIN_RE = re.compile(r'^\d{6}$')
+
+
+def _finish_login(request, user, next_url):
+    request.session.pop('login_profile_id', None)
+    auth.login(request, user)
+
+    if request.POST.get('remember_me'):
+        request.session.set_expiry(None)  # persist for SESSION_COOKIE_AGE (2 weeks)
+    else:
+        request.session.set_expiry(0)  # expire when the browser closes
+
+    if user.is_superuser:
+        return redirect('/nimda/')
+    elif next_url:
+        return redirect(next_url)
+    elif 'Recevio_Reception' in user.groups.values_list('name', flat=True):
+        return redirect('statistics')
+    elif 'Recevio_User' in user.groups.values_list('name', flat=True):
+        return redirect('reservation')
+    elif 'Recevio_Helpdesk' in user.groups.values_list('name', flat=True):
+        return redirect('dashboard')
+    else:
+        return redirect('profile')
+
+
 def login(request):
-    context = {}
+    """Two-step staff login: chip number, then the authorization code (PIN)
+    the user set on their first login. See GuestBook.backends.ChipPinBackend."""
+    next_param = clean_next_url(request.GET.get('next', '') or request.POST.get('next', ''))
 
     if request.method == 'GET':
-        form = UserLoginForm()
-        next_param = clean_next_url(request.GET.get('next', ''))
-        context['form'] = form
-        context['next'] = next_param
-        return render(request, 'login.html', context)
+        request.session.pop('login_profile_id', None)
+        return render(request, 'login.html', {'step': 'chip', 'next': next_param})
 
-    if request.method == 'POST':
-        form = UserLoginForm(request.POST)
-        username = request.POST.get('username')
-        password = request.POST.get('password')
-        user = auth.authenticate(username=username, password=password)
+    step = request.POST.get('step', 'chip')
 
-        if user:
-            auth.login(request, user)
+    if step == 'chip':
+        chip_number = (request.POST.get('chip_number') or '').strip()
+        profile = AdminProfile.objects.select_related('user').filter(chip_number=chip_number).first()
+        if not profile:
+            messages.error(request, "Incorrect chip number.", extra_tags='login')
+            return render(request, 'login.html', {'step': 'chip', 'next': next_param})
+        request.session['login_profile_id'] = profile.id
+        next_step = 'enter_pin' if profile.has_pin() else 'set_pin'
+        return render(request, 'login.html', {'step': next_step, 'next': next_param})
 
-            if request.POST.get('remember_me'):
-                request.session.set_expiry(None)  # persist for SESSION_COOKIE_AGE (2 weeks)
-            else:
-                request.session.set_expiry(0)  # expire when the browser closes
+    profile_id = request.session.get('login_profile_id')
+    profile = AdminProfile.objects.select_related('user').filter(pk=profile_id).first() if profile_id else None
+    if not profile:
+        messages.error(request, "Session expired — please enter your chip number again.", extra_tags='login')
+        return render(request, 'login.html', {'step': 'chip', 'next': next_param})
 
-            next_url = clean_next_url(request.POST.get('next', ''))
+    if step == 'set_pin':
+        pin = (request.POST.get('pin') or '').strip()
+        pin_confirm = (request.POST.get('pin_confirm') or '').strip()
+        if not PIN_RE.match(pin):
+            messages.error(request, "The authorization code must be exactly 6 digits.", extra_tags='login')
+            return render(request, 'login.html', {'step': 'set_pin', 'next': next_param})
+        if pin != pin_confirm:
+            messages.error(request, "The two codes do not match.", extra_tags='login')
+            return render(request, 'login.html', {'step': 'set_pin', 'next': next_param})
+        profile.pin_hash = make_password(pin)
+        profile.pin_set_at = timezone.now()
+        profile.save(update_fields=['pin_hash', 'pin_set_at'])
+        user = profile.user
+        user.backend = 'GuestBook.backends.ChipPinBackend'
+        return _finish_login(request, user, next_param)
 
-            if user.is_superuser:
-                return redirect('/nimda/')
-            elif next_url:
-                return redirect(next_url)
-            elif 'Recevio_Reception' in user.groups.values_list('name', flat=True):
-                return redirect('statistics')
-            elif 'Recevio_User' in user.groups.values_list('name', flat=True):
-                return redirect('reservation')
-            elif 'Recevio_Helpdesk' in user.groups.values_list('name', flat=True):
-                return redirect('dashboard')
-            else:
-                return redirect('profile')
-        else:
-            messages.error(request, "Incorrect login or password.", extra_tags='login')
+    if step == 'enter_pin':
+        pin = (request.POST.get('pin') or '').strip()
+        user = auth.authenticate(request, chip_number=profile.chip_number, pin=pin)
+        if not user:
+            messages.error(request, "Incorrect authorization code.", extra_tags='login')
+            return render(request, 'login.html', {'step': 'enter_pin', 'next': next_param})
+        return _finish_login(request, user, next_param)
 
-        return redirect('login')
-
-    return render(request, 'login.html', context)
+    return redirect('login')
 
 
 @login_required
@@ -2879,7 +2914,7 @@ def helpdesk_user_list(request):
     q = request.GET.get("q", "").strip()
 
     users = (User.objects
-             .select_related()
+             .select_related("adminprofile")
              .prefetch_related("groups")
              .order_by("username"))
 
@@ -2915,8 +2950,18 @@ def helpdesk_user_edit(request, uid: int):
 
     allowed_qs = Group.objects.filter(name__in=ALLOWED_GROUPS).order_by("name")
     current_allowed = set(user.groups.filter(name__in=ALLOWED_GROUPS))
+    profile, _ = AdminProfile.objects.get_or_create(user=user)
 
     if request.method == "POST":
+        action = request.POST.get("action", "update")
+
+        if action == "reset_pin":
+            profile.pin_hash = ""
+            profile.pin_set_at = None
+            profile.save(update_fields=["pin_hash", "pin_set_at"])
+            messages.success(request, "Authorization code reset — the user will set a new one on their next login.")
+            return redirect("helpdesk_user_edit", uid=user.pk)
+
         # Zaznaczone checkboxy
         selected_ids = request.POST.getlist("groups")
         wanted = set(allowed_qs.filter(id__in=selected_ids))
@@ -2936,13 +2981,26 @@ def helpdesk_user_edit(request, uid: int):
                 user.groups.add(helpdesk)
             messages.warning(request, "You cannot remove your own Helpdesk access. It has been restored.")
 
-        messages.success(request, "User groups updated.")
+        chip_number = (request.POST.get("chip_number") or "").strip()
+        if not chip_number:
+            profile.chip_number = None
+            profile.save(update_fields=["chip_number"])
+        elif not re.fullmatch(r"\d{5}", chip_number):
+            messages.error(request, "Chip number must be exactly 5 digits — not saved.")
+        elif AdminProfile.objects.exclude(pk=profile.pk).filter(chip_number=chip_number).exists():
+            messages.error(request, "That chip number is already assigned to another user — not saved.")
+        else:
+            profile.chip_number = chip_number
+            profile.save(update_fields=["chip_number"])
+
+        messages.success(request, "User updated.")
         return redirect("helpdesk_users")
 
     return render(request, "panel/helpdesk_user_edit.html", {
         "edited": user,
         "allowed_groups": allowed_qs,
         "current_allowed_ids": {g.id for g in current_allowed},
+        "profile": profile,
     })
 
 

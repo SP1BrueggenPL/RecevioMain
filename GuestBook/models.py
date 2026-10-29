@@ -123,6 +123,19 @@ class AdminProfile(models.Model):
     printer_address = models.CharField(max_length=200, blank=True, default='10.30.40.150', verbose_name='Printer IP/hostname')
     printer_port = models.IntegerField(default=9100, verbose_name='Printer port')
 
+    # Chip + authorization code login (replaces username/password on the
+    # staff /login/ page — see GuestBook.backends.ChipPinBackend).
+    chip_number = models.CharField(
+        max_length=5, unique=True, null=True, blank=True,
+        validators=[RegexValidator(r'^\d{5}$', 'Chip number must be exactly 5 digits.')],
+        verbose_name='Chip number',
+    )
+    pin_hash = models.CharField(max_length=128, blank=True, default="")
+    pin_set_at = models.DateTimeField(null=True, blank=True)
+
+    def has_pin(self) -> bool:
+        return bool(self.pin_hash)
+
 
 class Reservation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
