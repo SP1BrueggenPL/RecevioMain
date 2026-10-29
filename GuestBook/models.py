@@ -280,6 +280,8 @@ class RegistrationMethod(models.Model):
     ]
     slug = models.CharField(max_length=20, choices=SLUG_CHOICES, unique=True)
     label = models.CharField(max_length=100)
+    label_pl = models.CharField(max_length=100, blank=True, default="")
+    label_en = models.CharField(max_length=100, blank=True, default="")
     is_active = models.BooleanField(default=False)
     sort_order = models.PositiveSmallIntegerField(default=0)
     updated_at = models.DateTimeField(auto_now=True)
@@ -294,6 +296,14 @@ class RegistrationMethod(models.Model):
 
     def __str__(self):
         return self.label or self.slug
+
+    def get_label(self, lang: str) -> str:
+        """Kiosk-facing label for the given language code (session LANGUAGE_COOKIE_NAME
+        value, e.g. 'pl'/'en'). Falls back to label_en, then the legacy single-language
+        `label` field, so rows created before PL/EN support still render something."""
+        if lang and lang.startswith('pl') and self.label_pl:
+            return self.label_pl
+        return self.label_en or self.label
 
 
 class RegistrationStage(models.Model):

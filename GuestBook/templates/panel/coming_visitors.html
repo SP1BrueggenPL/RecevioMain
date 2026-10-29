@@ -56,7 +56,12 @@
       {% endif %}
     </td>
 
-    {# ---- SEND + RESEND ---- #}
+    {# ---- SEND ----
+         No automatic SMS/e-mail notification is sent for reservations —
+         staff relay the code/cancellation to the guest themselves (see
+         panel/reservation_code_create.html). This column only reflects
+         the status of any legacy notification attempt; there is no
+         "Resend" action since the SMS gateway behind it was removed. #}
     <td>
       {% if r.sms_status == 'sent' %}
         <span class="badge bg-success">OK</span>
@@ -66,19 +71,11 @@
         <span class="badge bg-danger">Error</span>
       {% elif r.sms_status == 'no_number' %}
         <span class="badge bg-secondary">No number</span>
+      {% elif r.sms_status == 'skipped' %}
+        <span class="badge bg-light text-dark">Relay manually</span>
       {% else %}
         <span class="badge bg-light text-dark">Pending</span>
       {% endif %}
-
-      <form method="post" action="{% url 'reservation_resend_sms' r.id %}" class="d-inline ms-2">
-        {% csrf_token %}
-        <input type="hidden" name="next" value="{{ request.get_full_path }}">
-        <button class="btn btn-sm btn-outline-secondary"
-  {% if r.status == 'completed' or r.status == 'cancelled' and not r.cancelled_at or r.status == 'cancelled' and r.cancelled_at < cutoff %}disabled{% endif %}>
-  <i class="fa fa-paper-plane"></i> Resend
-</button>
-
-      </form>
     </td>
 
     <td>{{ r.reservationcode.code|default:"—" }}</td>

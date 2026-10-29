@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.management import call_command
 from django.test import TestCase, override_settings
@@ -22,6 +23,7 @@ from GuestBook.models import (
     Visitor,
 )
 from GuestBook.backends import ChipPinBackend
+from GuestBook.forms import VisitorForm
 from GuestBook.mail_service import send_pending_package_reminder
 from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
 
@@ -188,6 +190,13 @@ class RemindUnpickedPackagesCommandTests(TestCase):
 def _make_helpdesk_user():
     group, _ = Group.objects.get_or_create(name="Recevio_Helpdesk")
     user = User.objects.create_user("helpdeskuser", password="pw")
+    user.groups.add(group)
+    return user
+
+
+def _make_reception_user():
+    group, _ = Group.objects.get_or_create(name="Recevio_Reception")
+    user = User.objects.create_user(f"receptionuser{User.objects.count()}", password="pw")
     user.groups.add(group)
     return user
 
@@ -579,3 +588,190 @@ class ChipNumberAssignmentTests(KioskRoutingTestCase):
         )
         profile_b, _ = AdminProfile.objects.get_or_create(user=self.user_b)
         self.assertEqual(profile_b.chip_number, "44444")
+
+
+class RegistrationMethodLabelI18nTests(KioskRoutingTestCase):
+    """The kiosk method-name regression: labels must follow the visitor's
+    selected language again (see RegistrationMethod.get_label)."""
+
+    def test_get_label_prefers_requested_language(self):
+        method = RegistrationMethod.objects.get(slug="badge")
+        method.label_pl = "Identyfikator"
+        method.label_en = "Badge"
+        method.save(update_fields=["label_pl", "label_en"])
+        self.assertEqual(method.get_label("pl"), "Identyfikator")
+        self.assertEqual(method.get_label("en"), "Badge")
+
+    def test_get_label_falls_back_to_legacy_label_when_blank(self):
+        method = RegistrationMethod.objects.get(slug="badge")
+        method.label_pl = ""
+        method.label_en = ""
+        method.label = "Badge"
+        method.save(update_fields=["label_pl", "label_en", "label"])
+        self.assertEqual(method.get_label("pl"), "Badge")
+
+    def test_choose_method_view_renders_polish_label(self):
+        RegistrationMethod.objects.filter(slug="manual").update(
+            label_pl="Formularz tożsamości", label_en="Identification form",
+        )
+        session = self.client.session
+        session[settings.LANGUAGE_COOKIE_NAME] = "pl"
+        session.save()
+        response = self.client.get(reverse("choose_method"))
+        self.assertContains(response, "Formularz tożsamości")
+        self.assertNotContains(response, "Identification form")
+
+    def test_choose_method_view_renders_english_label(self):
+        RegistrationMethod.objects.filter(slug="manual").update(
+            label_pl="Formularz tożsamości", label_en="Identification form",
+        )
+        session = self.client.session
+        session[settings.LANGUAGE_COOKIE_NAME] = "en"
+        session.save()
+        response = self.client.get(reverse("choose_method"))
+        self.assertContains(response, "Identification form")
+        self.assertNotContains(response, "Formularz tożsamości")
+
+
+class VisitorFormKeyboardClassTests(TestCase):
+    """The kiosk's on-screen keyboard only binds to input.kb-alpha (see
+    kiosk/_virtual_keyboard.html) — VisitorForm must put that class on its
+    free-text fields for the keyboard to appear on the guest-details form."""
+
+    def test_text_fields_get_kb_alpha_class(self):
+        form = VisitorForm()
+        for name in ("first_name", "last_name", "phone", "other_company", "other_purpose"):
+            self.assertIn("kb-alpha", form.fields[name].widget.attrs.get("class", ""))
+
+    def test_non_text_fields_do_not_get_kb_alpha_class(self):
+        form = VisitorForm()
+        for name in ("factory", "host", "no_company", "visit_purpose_choice"):
+            self.assertNotIn("kb-alpha", form.fields[name].widget.attrs.get("class", ""))
+
+
+class ReservationManagementTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.reception = _make_reception_user()
+        self.client.force_login(self.reception)
+        self.reservation = Reservation.objects.create(
+            user=self.reception,
+            visitor_first_name="Jan",
+            visitor_last_name="Kowalski",
+            phone="123456789",
+            factory=False,
+            date=timezone.now().date(),
+            status="sent",
+        )
+        self.code = ReservationCode.objects.create(reservation=self.reservation)
+        self.code.usage_count = 2
+        self.code.save(update_fields=["usage_count"])
+
+    def test_reset_usage_zeroes_counter(self):
+        resp = self.client.post(reverse("reservation_code_reset_usage", args=[self.code.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.code.refresh_from_db()
+        self.assertEqual(self.code.usage_count, 0)
+
+    def test_reset_usage_requires_reservation_permission(self):
+        User.objects.create_user("plainuser3", password="pw")
+        self.client.logout()
+        self.client.login(username="plainuser3", password="pw")
+        resp = self.client.post(reverse("reservation_code_reset_usage", args=[self.code.pk]))
+        self.assertNotEqual(resp.status_code, 200)
+        self.code.refresh_from_db()
+        self.assertEqual(self.code.usage_count, 2)
+
+    def test_cancel_sets_status_cancelled(self):
+        resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.reservation.refresh_from_db()
+        self.assertEqual(self.reservation.status, "cancelled")
+        self.assertIsNotNone(self.reservation.cancelled_at)
+
+    def test_helpdesk_can_also_cancel(self):
+        self.client.logout()
+        self.client.force_login(_make_helpdesk_user())
+        resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.reservation.refresh_from_db()
+        self.assertEqual(self.reservation.status, "cancelled")
+
+    def test_completed_reservation_cannot_be_cancelled(self):
+        self.reservation.status = "completed"
+        self.reservation.save(update_fields=["status"])
+        self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
+        self.reservation.refresh_from_db()
+        self.assertEqual(self.reservation.status, "completed")
+
+
+class ComingVisitorsViewTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_reception_user())
+
+    def test_lists_upcoming_unarrived_reservation(self):
+        reservation = Reservation.objects.create(
+            user=_make_reception_user(),
+            visitor_first_name="Anna",
+            visitor_last_name="Nowak",
+            phone="987654321",
+            factory=False,
+            date=timezone.now().date() + timedelta(days=1),
+            status="sent",
+        )
+        response = self.client.get(reverse("coming_visitors"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Anna")
+        self.assertContains(response, "Nowak")
+
+
+class AccountDeactivationTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = _make_helpdesk_user()
+        self.client.force_login(self.admin)
+        self.target_user = User.objects.create_user("deactivateme", password="unused")
+        self.profile = AdminProfile.objects.create(
+            user=self.target_user, chip_number="55555",
+            pin_hash=make_password("123456"), pin_set_at=timezone.now(),
+        )
+
+    def test_deactivate_sets_is_active_false(self):
+        resp = self.client.post(
+            reverse("helpdesk_user_edit", args=[self.target_user.pk]),
+            {"action": "deactivate"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.target_user.refresh_from_db()
+        self.assertFalse(self.target_user.is_active)
+
+    def test_reactivate_sets_is_active_true(self):
+        self.target_user.is_active = False
+        self.target_user.save(update_fields=["is_active"])
+        resp = self.client.post(
+            reverse("helpdesk_user_edit", args=[self.target_user.pk]),
+            {"action": "reactivate"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.target_user.refresh_from_db()
+        self.assertTrue(self.target_user.is_active)
+
+    def test_cannot_deactivate_own_account(self):
+        resp = self.client.post(
+            reverse("helpdesk_user_edit", args=[self.admin.pk]),
+            {"action": "deactivate"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.admin.refresh_from_db()
+        self.assertTrue(self.admin.is_active)
+
+    def test_deactivated_user_cannot_log_in_via_chip_pin(self):
+        self.target_user.is_active = False
+        self.target_user.save(update_fields=["is_active"])
+        user = ChipPinBackend().authenticate(None, chip_number="55555", pin="123456")
+        self.assertIsNone(user)
+
+    def test_active_user_can_still_log_in_via_chip_pin(self):
+        user = ChipPinBackend().authenticate(None, chip_number="55555", pin="123456")
+        self.assertEqual(user, self.target_user)

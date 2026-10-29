@@ -11,7 +11,13 @@
   {% for lane in lanes %}
   <div class="card shadow-sm border-0 mb-4 method-card" data-method-id="{{ lane.method.id }}">
     <div class="card-header d-flex justify-content-between align-items-center {% if lane.method.is_active %}bg-success text-white{% else %}bg-secondary text-white{% endif %}">
-      <span class="fw-semibold">{{ lane.method.label }}</span>
+      <span class="fw-semibold method-label-edit" role="button" tabindex="0"
+            data-method-id="{{ lane.method.id }}"
+            data-label-pl="{{ lane.method.label_pl }}"
+            data-label-en="{{ lane.method.label_en }}"
+            title="Click to edit the kiosk label (PL/EN)">
+        {{ lane.method.label }}
+      </span>
       <div class="form-check form-switch m-0">
         <input class="form-check-input method-toggle" type="checkbox" role="switch"
                data-method-id="{{ lane.method.id }}"
@@ -74,6 +80,8 @@
   .pipeline-block.completion-block { cursor: pointer; }
   .pipeline-block.completion-block:hover { filter: brightness(1.1); }
   .connector { font-size: 1.4rem; color: #999; margin: 0 8px; }
+  .method-label-edit { cursor: pointer; border-bottom: 1px dashed rgba(255,255,255,0.6); }
+  .method-label-edit:hover { filter: brightness(1.2); }
 </style>
 
 <!-- Edit modal (shared by every completion block) -->
@@ -113,6 +121,34 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
         <button type="button" class="btn btn-primary" id="ce-save">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit modal: kiosk method label, PL/EN -->
+<div class="modal fade" id="methodLabelEditModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Edit kiosk label</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="ml-method-id">
+        <div class="mb-2">
+          <label class="form-label">Polish label</label>
+          <input type="text" id="ml-label-pl" class="form-control">
+        </div>
+        <div class="mb-2">
+          <label class="form-label">English label</label>
+          <input type="text" id="ml-label-en" class="form-control">
+        </div>
+        <div id="ml-status" class="small mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="ml-save">Save</button>
       </div>
     </div>
   </div>
@@ -204,6 +240,39 @@ document.addEventListener('DOMContentLoaded', function () {
         activeBlock.dataset.body = payload.body_no_badge;
         activeBlock.dataset.footer = payload.footer_note;
         if (payload.print_popup_enabled !== undefined) activeBlock.dataset.print = payload.print_popup_enabled;
+      }
+      statusEl.textContent = 'Saved.';
+    }).catch(function () { statusEl.textContent = 'Network error.'; });
+  });
+
+  const labelModalEl = document.getElementById('methodLabelEditModal');
+  const labelModal = new bootstrap.Modal(labelModalEl);
+  let activeLabelEl = null;
+
+  document.querySelectorAll('.method-label-edit').forEach(function (el) {
+    el.addEventListener('click', function () {
+      activeLabelEl = el;
+      document.getElementById('ml-method-id').value = el.dataset.methodId;
+      document.getElementById('ml-label-pl').value = el.dataset.labelPl || '';
+      document.getElementById('ml-label-en').value = el.dataset.labelEn || '';
+      document.getElementById('ml-status').textContent = '';
+      labelModal.show();
+    });
+  });
+
+  document.getElementById('ml-save').addEventListener('click', function () {
+    const statusEl = document.getElementById('ml-status');
+    statusEl.textContent = 'Saving...';
+    const payload = {
+      method_id: document.getElementById('ml-method-id').value,
+      label_pl: document.getElementById('ml-label-pl').value,
+      label_en: document.getElementById('ml-label-en').value,
+    };
+    postForm("{% url 'registration_method_label_save' %}", payload).then(function (res) {
+      if (!res.ok) { statusEl.textContent = 'Error saving.'; return; }
+      if (activeLabelEl) {
+        activeLabelEl.dataset.labelPl = res.label_pl;
+        activeLabelEl.dataset.labelEn = res.label_en;
       }
       statusEl.textContent = 'Saved.';
     }).catch(function () { statusEl.textContent = 'Network error.'; });

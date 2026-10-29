@@ -32,7 +32,10 @@
               {% for u in users %}
               <tr>
                 <td>{{ forloop.counter }}</td>
-                <td>{{ u.username }}</td>
+                <td>
+                  {{ u.username }}
+                  {% if not u.is_active %}<span class="badge bg-dark ms-1">Deactivated</span>{% endif %}
+                </td>
                 <td>{{ u.first_name }} {{ u.last_name }}</td>
                 <td>{{ u.email|default:"-" }}</td>
                 <td>{{ u.adminprofile.chip_number|default:"—" }}</td>

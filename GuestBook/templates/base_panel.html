@@ -79,15 +79,8 @@
 
           {% if user.is_authenticated %}
 
-            {# ——— ZAWSZE: zwykły użytkownik ——— #}
-            {% if user|has_group:"Recevio_User" %}
-              <li class="nav-item">
-                <a class="nav-link" href="{% url 'reservation' %}">Reservation</a>
-              </li>
-            {% endif %}
-
-            {# ——— RECEPTION: VisitLog ——— #}
-            {% if user|has_group:"Recevio_Reception" %}
+            {# ——— RECEPTION / HELPDESK: VisitLog ——— #}
+            {% if user|has_group:"Recevio_Reception" or user|has_group:"Recevio_Helpdesk" %}
               <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="visitlogDropdown" role="button"
                    data-bs-toggle="dropdown" aria-expanded="false">
@@ -98,6 +91,7 @@
                   <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
                   <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
+                  <li><a class="dropdown-item" href="{% url 'coming_visitors' %}">ComingVisitors</a></li>
                 </ul>
               </li>
             {% endif %}
@@ -120,19 +114,6 @@
             {% endif %}
             {# ——— HELPDESK: SupportCenter ——— #}
             {% if user|has_group:"Recevio_Helpdesk" %}
-                      <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" id="helpdeskVisitlogDropdown" role="button"
-                   data-bs-toggle="dropdown" aria-expanded="false">
-                  VisitLog
-                </a>
-                <ul class="dropdown-menu" aria-labelledby="helpdeskVisitlogDropdown">
-                    <li><a class="dropdown-item" href="{% url 'statistics' %}">Statistics</a></li>
-                  <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
-                  <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
-                  <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
-                </ul>
-              </li>
-
                       <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="supportDropdown" role="button"
                    data-bs-toggle="dropdown" aria-expanded="false">

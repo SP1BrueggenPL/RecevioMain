@@ -90,10 +90,19 @@ class VisitorForm(forms.ModelForm):
 
         return cleaned_data
 
+    # Free-text fields that should trigger the kiosk's on-screen QWERTY keyboard
+    # (see kiosk/_virtual_keyboard.html, which binds to this class). Excludes
+    # checkboxes/selects (factory, host, no_company, visit_purpose_choice) and
+    # the date fields, which don't need it.
+    KEYBOARD_FIELDS = ('first_name', 'last_name', 'phone', 'other_company', 'other_purpose')
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in self.fields.values():
+        for name, field in self.fields.items():
             field.widget.attrs.update({'autocomplete': 'off'})
+            if name in self.KEYBOARD_FIELDS:
+                existing = field.widget.attrs.get('class', '')
+                field.widget.attrs['class'] = (existing + ' kb-alpha').strip()
 
 
 class SignatureForm(forms.ModelForm):
