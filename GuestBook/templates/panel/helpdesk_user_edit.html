@@ -15,6 +15,11 @@
             {% if edited.is_staff %}
               <span class="badge bg-info ms-2">staff</span>
             {% endif %}
+            {% if edited.is_active %}
+              <span class="badge bg-success ms-2">Active</span>
+            {% else %}
+              <span class="badge bg-dark ms-2">Deactivated</span>
+            {% endif %}
           </div>
 
           <form method="post" class="mt-2">
@@ -41,7 +46,7 @@
             </div>
 
             <div class="card">
-              <div class="card-header">Access groups (GuestBook_*)</div>
+              <div class="card-header">Access groups</div>
               <div class="card-body">
                 {% for g in allowed_groups %}
                   <div class="form-check mb-1">
@@ -63,11 +68,26 @@
           </form>
 
           {% if profile.has_pin %}
-          <form method="post" class="mt-3"
+          <form method="post" class="mt-3 d-inline-block"
                 onsubmit="return confirm('Reset this user\'s authorization code? They will have to set a new one on their next login.');">
             {% csrf_token %}
             <input type="hidden" name="action" value="reset_pin">
             <button type="submit" class="btn btn-outline-danger btn-sm">Reset authorization code</button>
+          </form>
+          {% endif %}
+
+          {% if edited.is_active %}
+          <form method="post" class="mt-3 d-inline-block ms-2"
+                onsubmit="return confirm('Deactivate this account? The user will no longer be able to log in.');">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="deactivate">
+            <button type="submit" class="btn btn-outline-dark btn-sm">Deactivate account</button>
+          </form>
+          {% else %}
+          <form method="post" class="mt-3 d-inline-block ms-2">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="reactivate">
+            <button type="submit" class="btn btn-outline-success btn-sm">Reactivate account</button>
           </form>
           {% endif %}
 

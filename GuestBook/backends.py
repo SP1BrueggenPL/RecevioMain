@@ -21,15 +21,18 @@ class ChipPinBackend:
         profile = AdminProfile.objects.select_related('user').filter(chip_number=chip_number).first()
         if not profile or not profile.pin_hash:
             return None
+        if not profile.user.is_active:
+            return None
         if not check_password(pin, profile.pin_hash):
             return None
         return profile.user
 
     def get_user(self, user_id):
         try:
-            return User.objects.get(pk=user_id)
+            user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return None
+        return user if user.is_active else None
 
 
 class LDAPBackend:

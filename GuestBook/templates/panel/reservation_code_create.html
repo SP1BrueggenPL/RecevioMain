@@ -80,11 +80,28 @@
                     {{ c.reservation.visitor_first_name }} {{ c.reservation.visitor_last_name }}
                   </span>
                 </div>
-                <span class="badge bg-secondary">{{ c.usage_count }}/{{ c.max_uses }} used</span>
+                {% if c.reservation.status == 'cancelled' %}
+                  <span class="badge bg-dark">Cancelled</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ c.usage_count }}/{{ c.max_uses }} used</span>
+                {% endif %}
               </div>
               <div class="text-muted small mt-1">
                 Host: {{ c.reservation.host|default:"—" }} · Created: {{ c.created_at|date:"Y-m-d H:i" }}
               </div>
+              {% if c.reservation.status != 'cancelled' %}
+              <div class="mt-2">
+                <form method="post" action="{% url 'reservation_code_reset_usage' c.pk %}" class="d-inline">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-secondary">Reset uses</button>
+                </form>
+                <form method="post" action="{% url 'reservation_cancel' c.reservation.pk %}" class="d-inline ms-1"
+                      onsubmit="return confirm('Cancel this reservation? The guest will be notified by SMS if a phone number is on file.');">
+                  {% csrf_token %}
+                  <button type="submit" class="btn btn-sm btn-outline-danger">Cancel</button>
+                </form>
+              </div>
+              {% endif %}
             </li>
           {% empty %}
             <li class="list-group-item text-muted">No reservations yet</li>

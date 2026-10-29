@@ -364,11 +364,12 @@ def _require_method_active(slug, request):
 
 
 def choose_method_view(request):
+    lang = request.session.get(settings.LANGUAGE_COOKIE_NAME, 'pl')
     tiles = []
     for method in RegistrationMethod.objects.filter(is_active=True).order_by('sort_order', 'id'):
         meta = METHOD_TILE_META.get(method.slug)
         if meta:
-            tiles.append({'label': method.label, **meta})
+            tiles.append({'label': method.get_label(lang), **meta})
     return render(request, 'kiosk/choose_method.html', {
         'tiles': tiles,
         'unavailable': request.GET.get('unavailable'),
@@ -2250,43 +2251,31 @@ CANCELLABLE_STATUSES = {'sent', 'pending', 'timeout', 'error', 'no_number'}
 def reservation_cancel_view(request, pk):
     reservation = get_object_or_404(Reservation, pk=pk)
 
-    # uprawnienia: właściciel lub recepcja
+    # uprawnienia: właściciel lub recepcja/helpdesk (ten sam zestaw co przy wystawianiu kodów)
     is_owner = reservation.user_id == request.user.id
-    is_reception = request.user.groups.filter(name="Recevio_Reception").exists()
-    if not (is_owner or is_reception):
+    if not (is_owner or _can_issue_reservation_codes(request.user)):
         return HttpResponseForbidden("You don't have permission to cancel this reservation.")
 
     # czy wolno anulować tę rezerwację?
     if reservation.status not in CANCELLABLE_STATUSES:
         messages.error(request, "You can only cancel non-arrived, non-completed reservations.")
-        return redirect('reservation')
-
-    # SMS do gościa (z twardym timeoutem)
-    msg = (
-        "Brüggen Polska.\n\n"
-        f"Twoje spotkanie zaplanowane na {reservation.date.strftime('%d.%m.%Y')} "
-        f"o {reservation.time or '--'} zostało ANULOWANE.\n\n"
-        "W razie potrzeby prosimy o kontakt z osobą zapraszającą."
-    )
-    sms_status = send_sms_with_timeout(reservation.phone, msg, timeout=5)  # 'sent'|'timeout'|'error'|'no_number'
+        return redirect('reservation_code_create')
 
     # ustaw anulowanie + znacznik czasu
+    # Uwaga: SMS do gościa był tu kiedyś wysyłany automatycznie, ale gateway SMS
+    # został wyłączony (send_sms_with_timeout jest zakomentowany w tym pliku) —
+    # Reservation nie ma pola e-mail, więc nie ma czym tego zastąpić. Zgodnie z
+    # już obowiązującą zasadą dla tej funkcji ("No SMS or e-mail is sent
+    # automatically — relay the generated code to the guest yourself"), staff
+    # informuje gościa o anulowaniu sam.
     reservation.status = 'cancelled'
-    reservation.cancelled_at = timezone.now()  # <<<<<<
-    reservation.sms_status = sms_status  # od razu odśwież „Send"
+    reservation.cancelled_at = timezone.now()
+    reservation.sms_status = 'skipped'
     reservation.save(update_fields=['status', 'cancelled_at', 'sms_status'])
 
-    # komunikaty UI
-    if sms_status == 'sent':
-        messages.success(request, "Reservation cancelled and SMS sent to the guest.")
-    elif sms_status == 'no_number':
-        messages.warning(request, "Reservation cancelled. No phone number to notify the guest.")
-    elif sms_status == 'timeout':
-        messages.warning(request, "Reservation cancelled. SMS sending timed out.")
-    else:
-        messages.warning(request, "Reservation cancelled. Could not send SMS.")
+    messages.success(request, "Reservation cancelled — remember to let the guest know yourself.")
 
-    return redirect('reservation')
+    return redirect('reservation_code_create')
 
 
 
@@ -2895,7 +2884,9 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404, render, redirect
 
 ALLOWED_GROUPS = (
-    "Recevio_User",
+    # "Recevio_User" intentionally left out: it only ever gated the
+    # self-service booking flow, which is retired (reception issues all
+    # reservations now) and whose URLs are commented out in urls.py.
     "Recevio_Reception",
     "Recevio_Helpdesk",
     "Recevio_BoxFlow",
@@ -2960,6 +2951,18 @@ def helpdesk_user_edit(request, uid: int):
             profile.pin_set_at = None
             profile.save(update_fields=["pin_hash", "pin_set_at"])
             messages.success(request, "Authorization code reset — the user will set a new one on their next login.")
+            return redirect("helpdesk_user_edit", uid=user.pk)
+
+        if action in ("deactivate", "reactivate"):
+            if action == "deactivate" and user.pk == request.user.pk:
+                messages.error(request, "You cannot deactivate your own account.")
+                return redirect("helpdesk_user_edit", uid=user.pk)
+            user.is_active = (action == "reactivate")
+            user.save(update_fields=["is_active"])
+            messages.success(
+                request,
+                "Account reactivated." if user.is_active else "Account deactivated — this user can no longer log in.",
+            )
             return redirect("helpdesk_user_edit", uid=user.pk)
 
         # Zaznaczone checkboxy
@@ -3888,6 +3891,20 @@ def reservation_code_create_view(request):
 
 
 @login_required
+@reservation_codes_required
+@require_POST
+def reservation_code_reset_usage_view(request, pk):
+    """Reset a ReservationCode's use counter back to 0 so the same code can be
+    used again, up to its existing limit — 'reset code' means reset the
+    counter, not issue a new code (see plan)."""
+    code = get_object_or_404(ReservationCode, pk=pk)
+    code.usage_count = 0
+    code.save(update_fields=['usage_count'])
+    messages.success(request, f"Usage count reset for code {code.code}.")
+    return redirect('reservation_code_create')
+
+
+@login_required
 @helpdesk_required
 def registration_methods_panel(request):
     for screen in ('manual', 'badge', 'code'):
@@ -3920,6 +3937,18 @@ def registration_method_toggle(request):
     method.updated_by = request.user
     method.save(update_fields=['is_active', 'updated_by', 'updated_at'])
     return JsonResponse({'ok': True, 'is_active': method.is_active})
+
+
+@login_required
+@helpdesk_required
+@require_POST
+def registration_method_label_save(request):
+    method = get_object_or_404(RegistrationMethod, pk=request.POST.get('method_id'))
+    method.label_pl = request.POST.get('label_pl', '').strip()
+    method.label_en = request.POST.get('label_en', '').strip()
+    method.updated_by = request.user
+    method.save(update_fields=['label_pl', 'label_en', 'updated_by', 'updated_at'])
+    return JsonResponse({'ok': True, 'label_pl': method.label_pl, 'label_en': method.label_en})
 
 
 @login_required
