@@ -154,10 +154,10 @@
               </li>
             {% endif %}
 
-            {# ——— Registration codes: own top-bar item, separate visibility group ——— #}
-            {% if user|has_group:"Recevio_ReservationCodes" or user|has_group:"Recevio_Helpdesk" %}
+            {# ——— Reservation: own top-bar item, done by reception ——— #}
+            {% if user|has_group:"Recevio_Reception" or user|has_group:"Recevio_Helpdesk" %}
               <li class="nav-item">
-                <a class="nav-link" href="{% url 'reservation_code_create' %}">Registration codes</a>
+                <a class="nav-link" href="{% url 'reservation_code_create' %}">Reservation</a>
               </li>
             {% endif %}
 
