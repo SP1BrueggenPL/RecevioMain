@@ -184,7 +184,8 @@ LDAP_GROUP_BASE_DN = os.getenv("LDAP_GROUP_BASE_DN")
 # Kolejność backendów logowania
 AUTHENTICATION_BACKENDS = [
     # 'GuestBook.backends.LDAPBackend',  # Disabled: on-premise LDAP not reachable from Azure
-    'django.contrib.auth.backends.ModelBackend',
+    'django.contrib.auth.backends.ModelBackend',  # username/password — kept for the Django admin login at /nimda/
+    'GuestBook.backends.ChipPinBackend',  # chip number + authorization code — staff /login/ page
 ]
 
 SMS_GATEWAY_URL = os.getenv("SMS_GATEWAY_URL")

@@ -10,6 +10,7 @@ from django.utils import timezone
 from django.utils.translation import activate
 
 from GuestBook.models import (
+    AdminProfile,
     CompletionScreenContent,
     Package,
     Recipient,
@@ -20,6 +21,7 @@ from GuestBook.models import (
     Sender,
     Visitor,
 )
+from GuestBook.backends import ChipPinBackend
 from GuestBook.mail_service import send_pending_package_reminder
 from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
 
@@ -417,3 +419,163 @@ class CodeRegistrationFlowTests(KioskRoutingTestCase):
 
         self.code.refresh_from_db()
         self.assertGreaterEqual(self.code.usage_count, 1)
+
+
+from django.contrib.auth.hashers import make_password
+
+
+class ChipPinBackendTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("chipuser", password="unused")
+        self.profile = AdminProfile.objects.create(user=self.user, chip_number="12345")
+
+    def test_correct_pin_authenticates(self):
+        self.profile.pin_hash = make_password("654321")
+        self.profile.save(update_fields=["pin_hash"])
+        authenticated = ChipPinBackend().authenticate(None, chip_number="12345", pin="654321")
+        self.assertEqual(authenticated, self.user)
+
+    def test_wrong_pin_fails(self):
+        self.profile.pin_hash = make_password("654321")
+        self.profile.save(update_fields=["pin_hash"])
+        self.assertIsNone(ChipPinBackend().authenticate(None, chip_number="12345", pin="000000"))
+
+    def test_no_pin_set_yet_fails(self):
+        self.assertIsNone(ChipPinBackend().authenticate(None, chip_number="12345", pin="654321"))
+
+    def test_unknown_chip_number_does_not_crash(self):
+        self.assertIsNone(ChipPinBackend().authenticate(None, chip_number="99999", pin="654321"))
+
+    def test_missing_kwargs_returns_none(self):
+        self.assertIsNone(ChipPinBackend().authenticate(None))
+
+
+class ChipLoginFlowTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user("chipflow", password="unused")
+        self.profile = AdminProfile.objects.create(user=self.user, chip_number="54321")
+
+    def test_first_login_sets_pin_and_logs_in(self):
+        c = self.client
+        resp = c.post(reverse("login"), {"step": "chip", "chip_number": "54321"})
+        self.assertContains(resp, 'name="step" value="set_pin"')
+
+        resp = c.post(reverse("login"), {
+            "step": "set_pin", "pin": "111222", "pin_confirm": "111222",
+        })
+        self.assertEqual(resp.status_code, 302)
+        self.profile.refresh_from_db()
+        self.assertTrue(self.profile.has_pin())
+        self.assertIsNotNone(self.profile.pin_set_at)
+
+        self.assertEqual(c.get(reverse("profile")).status_code, 200)
+
+    def test_mismatched_pin_confirmation_is_not_saved(self):
+        c = self.client
+        c.post(reverse("login"), {"step": "chip", "chip_number": "54321"})
+        c.post(reverse("login"), {
+            "step": "set_pin", "pin": "111222", "pin_confirm": "999999",
+        })
+        self.profile.refresh_from_db()
+        self.assertFalse(self.profile.has_pin())
+
+    def test_existing_pin_correct_code_logs_in(self):
+        self.profile.pin_hash = make_password("777888")
+        self.profile.pin_set_at = timezone.now()
+        self.profile.save()
+        c = self.client
+        c.post(reverse("login"), {"step": "chip", "chip_number": "54321"})
+        resp = c.post(reverse("login"), {"step": "enter_pin", "pin": "777888"})
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(c.get(reverse("profile")).status_code, 200)
+
+    def test_existing_pin_wrong_code_does_not_log_in(self):
+        self.profile.pin_hash = make_password("777888")
+        self.profile.pin_set_at = timezone.now()
+        self.profile.save()
+        c = self.client
+        c.post(reverse("login"), {"step": "chip", "chip_number": "54321"})
+        c.post(reverse("login"), {"step": "enter_pin", "pin": "000000"})
+        # still anonymous -> @login_required bounces to login
+        self.assertEqual(c.get(reverse("profile")).status_code, 302)
+
+    def test_unknown_chip_number_does_not_log_in(self):
+        c = self.client
+        c.post(reverse("login"), {"step": "chip", "chip_number": "00000"})
+        self.assertEqual(c.get(reverse("profile")).status_code, 302)
+
+    def test_superuser_login_redirects_to_django_admin(self):
+        su = User.objects.create_superuser("superchip", "s@example.com", "unused")
+        AdminProfile.objects.create(user=su, chip_number="90000")
+        c = self.client
+        c.post(reverse("login"), {"step": "chip", "chip_number": "90000"})
+        resp = c.post(reverse("login"), {
+            "step": "set_pin", "pin": "135790", "pin_confirm": "135790",
+        })
+        self.assertRedirects(resp, "/nimda/", fetch_redirect_response=False)
+
+
+class ResetAuthorizationCodeTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = _make_helpdesk_user()
+        self.client.force_login(self.admin)
+        self.target_user = User.objects.create_user("resetme", password="unused")
+        self.profile = AdminProfile.objects.create(
+            user=self.target_user, chip_number="11111",
+            pin_hash=make_password("222222"), pin_set_at=timezone.now(),
+        )
+
+    def test_reset_clears_pin(self):
+        resp = self.client.post(
+            reverse("helpdesk_user_edit", args=[self.target_user.pk]),
+            {"action": "reset_pin"},
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.profile.refresh_from_db()
+        self.assertEqual(self.profile.pin_hash, "")
+        self.assertIsNone(self.profile.pin_set_at)
+
+    def test_user_must_set_new_pin_after_reset(self):
+        self.client.post(
+            reverse("helpdesk_user_edit", args=[self.target_user.pk]),
+            {"action": "reset_pin"},
+        )
+        c2 = self.client
+        resp = c2.post(reverse("login"), {"step": "chip", "chip_number": "11111"})
+        self.assertContains(resp, 'name="step" value="set_pin"')
+
+
+class ChipNumberAssignmentTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.admin = _make_helpdesk_user()
+        self.client.force_login(self.admin)
+        self.user_a = User.objects.create_user("usera", password="unused")
+        self.user_b = User.objects.create_user("userb", password="unused")
+        AdminProfile.objects.create(user=self.user_a, chip_number="33333")
+
+    def test_cannot_assign_duplicate_chip_number(self):
+        self.client.post(
+            reverse("helpdesk_user_edit", args=[self.user_b.pk]),
+            {"action": "update", "chip_number": "33333"},
+        )
+        profile_b, _ = AdminProfile.objects.get_or_create(user=self.user_b)
+        self.assertNotEqual(profile_b.chip_number, "33333")
+
+    def test_invalid_chip_number_format_is_rejected(self):
+        self.client.post(
+            reverse("helpdesk_user_edit", args=[self.user_b.pk]),
+            {"action": "update", "chip_number": "abc12"},
+        )
+        profile_b, _ = AdminProfile.objects.get_or_create(user=self.user_b)
+        self.assertNotEqual(profile_b.chip_number, "abc12")
+
+    def test_valid_chip_number_is_saved(self):
+        self.client.post(
+            reverse("helpdesk_user_edit", args=[self.user_b.pk]),
+            {"action": "update", "chip_number": "44444"},
+        )
+        profile_b, _ = AdminProfile.objects.get_or_create(user=self.user_b)
+        self.assertEqual(profile_b.chip_number, "44444")
