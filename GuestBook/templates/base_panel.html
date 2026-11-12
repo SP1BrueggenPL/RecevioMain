@@ -91,7 +91,7 @@
                   <li><a class="dropdown-item" href="{% url 'dashboard' %}">GuestBook</a></li>
                   <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">Approvals</a></li>
                   <li><a class="dropdown-item" href="{% url 'nearby_persons' %}">NearbyPersons</a></li>
-                  <li><a class="dropdown-item" href="{% url 'coming_visitors' %}">ComingVisitors</a></li>
+                  <li class="d-none"><a class="dropdown-item" href="{% url 'coming_visitors' %}">ComingVisitors</a></li>
                 </ul>
               </li>
             {% endif %}
@@ -166,9 +166,64 @@
 
           {% endif %}
         </ul>
+
+        {% if user.is_authenticated %}
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item dropdown" id="notifications-bell">
+            <a class="nav-link position-relative" href="#" id="notificationsDropdown" role="button"
+               data-bs-toggle="dropdown" aria-expanded="false" title="Notifications">
+              <i class="fa fa-bell"></i>
+              <span class="badge rounded-pill bg-danger position-absolute d-none"
+                    id="notifications-badge"
+                    style="top: -2px; right: -8px; font-size: 0.65rem;">0</span>
+            </a>
+            <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="notificationsDropdown">
+              <li><span class="dropdown-item-text" id="notifications-text">No new registrations.</span></li>
+              <li><hr class="dropdown-divider"></li>
+              <li><a class="dropdown-item" href="{% url 'pending_approvals' %}">View pending approvals</a></li>
+            </ul>
+          </li>
+        </ul>
+        {% endif %}
       </div>
     </div>
   </nav>
+  {% if user.is_authenticated %}
+  <script>
+  (function () {
+    const badge = document.getElementById('notifications-badge');
+    const text = document.getElementById('notifications-text');
+    const bellDropdown = document.getElementById('notificationsDropdown');
+
+    function refresh() {
+      fetch("{% url 'notifications_status' %}")
+        .then(r => r.json())
+        .then(data => {
+          const count = data.count || 0;
+          if (count > 0) {
+            badge.textContent = count > 99 ? '99+' : String(count);
+            badge.classList.remove('d-none');
+            text.textContent = count + ' new kiosk registration' + (count === 1 ? '' : 's') + ' waiting.';
+          } else {
+            badge.classList.add('d-none');
+            text.textContent = 'No new registrations.';
+          }
+        })
+        .catch(() => {});
+    }
+
+    bellDropdown.addEventListener('shown.bs.dropdown', function () {
+      fetch("{% url 'notifications_mark_seen' %}", {
+        method: 'POST',
+        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
+      }).then(refresh).catch(() => {});
+    });
+
+    refresh();
+    setInterval(refresh, 20000);
+  })();
+  </script>
+  {% endif %}
 {# ── FLASH MESSAGES (panel) ───────────────────────────────────────────── #}
 {% if messages %}
   <div class="container mt-3">
