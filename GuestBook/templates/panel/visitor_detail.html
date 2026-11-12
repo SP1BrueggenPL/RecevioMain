@@ -144,12 +144,19 @@
           <br>
 <a href="{% url 'dashboard' %}" class="btn btn-secondary">← Back to GuestBook</a>
 
-{% if user.is_authenticated and user|has_group:"GuestBook_Helpdesk" %}
+{% if user.is_authenticated and user|has_group:"Recevio_Helpdesk" or user.is_superuser %}
   <a href="{% url 'visitor_edit' guest.id %}" class="btn btn-warning ms-2">
     <i class="fa fa-edit"></i> Edit Visitor
   </a>
+  <form method="post" action="{% url 'visitor_delete' guest.id %}" class="d-inline ms-2"
+        onsubmit="return confirm('Permanently delete this visitor record? This cannot be undone.');">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-outline-danger">
+      <i class="fa fa-trash"></i> Delete Visitor
+    </button>
+  </form>
 {% endif %}
-<a href="{% url 'reprint_badge' guest.id %}" class="btn btn-outline-primary ms-2">
+<a href="{% url 'reprint_badge' guest.id %}" class="btn btn-outline-primary ms-2 d-none">
   <i class="fa fa-print"></i> Reprint Badge
 </a>
 

@@ -15,11 +15,11 @@
 
 <div style="max-width: 1200px; margin: auto; padding: 4rem; text-align: center;">
   <h1 style="font-size: 3rem; margin-bottom: 1.5rem;">
-    {{ content.heading|default:_("Your registration has been successfully completed.") }}
+    {{ heading }}
   </h1>
 
   <h3 style="font-size: 2rem; margin-bottom: 2rem;">
-    {{ content.subheading|default:_("The host has been informed about the completion of your registration") }}
+    {{ subheading }}
   </h3>
 
   {% if show_badge and badge_color %}
@@ -30,14 +30,17 @@
         {{ badge_color }}
       </strong>
     </p>
+    {% if badge_issuance_note %}
+    <p style="font-size: 1.6rem; margin-bottom: 2rem;">{{ badge_issuance_note }}</p>
+    {% endif %}
   {% else %}
     <p style="font-size: 2rem; margin-bottom: 2rem;">
-      {{ content.body_no_badge|default:_("A badge is not required for visitors who will not access the production area.") }}
+      {{ body_no_badge }}
     </p>
   {% endif %}
 
   <p style="margin-top: 2rem; font-style: italic; font-size: 1.8rem; color: #514b51;">
-    {{ content.footer_note|default:_("You will be redirected to the start screen in a moment...") }}
+    {{ footer_note }}
   </p>
   <!-- ✅ Przycisk powrotu -->
   <div style="margin-top: 3rem;">

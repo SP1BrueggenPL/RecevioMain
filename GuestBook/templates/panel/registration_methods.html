@@ -49,10 +49,16 @@
           <span class="connector">&#8594;</span>
           <div class="pipeline-block active completion-block"
                data-screen="{{ lane.method.slug }}"
-               data-heading="{{ lane.content.heading }}"
-               data-subheading="{{ lane.content.subheading }}"
-               data-body="{{ lane.content.body_no_badge }}"
-               data-footer="{{ lane.content.footer_note }}"
+               data-heading-pl="{{ lane.content.heading_pl }}"
+               data-heading-en="{{ lane.content.heading_en }}"
+               data-subheading-pl="{{ lane.content.subheading_pl }}"
+               data-subheading-en="{{ lane.content.subheading_en }}"
+               data-body-pl="{{ lane.content.body_no_badge_pl }}"
+               data-body-en="{{ lane.content.body_no_badge_en }}"
+               data-footer-pl="{{ lane.content.footer_note_pl }}"
+               data-footer-en="{{ lane.content.footer_note_en }}"
+               data-badgenote-pl="{{ lane.content.badge_issuance_note_pl }}"
+               data-badgenote-en="{{ lane.content.badge_issuance_note_en }}"
                data-print="{{ lane.content.print_popup_enabled|yesno:'true,false' }}"
                data-show-print="{% if lane.method.slug == 'manual' %}true{% else %}false{% endif %}"
                role="button" tabindex="0">
@@ -94,21 +100,57 @@
       </div>
       <div class="modal-body">
         <input type="hidden" id="ce-screen">
-        <div class="mb-2">
-          <label class="form-label">Heading</label>
-          <input type="text" id="ce-heading" class="form-control">
+
+        <div class="row mb-2">
+          <div class="col-6">
+            <label class="form-label">Heading (PL)</label>
+            <input type="text" id="ce-heading-pl" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Heading (EN)</label>
+            <input type="text" id="ce-heading-en" class="form-control">
+          </div>
         </div>
-        <div class="mb-2">
-          <label class="form-label">Subheading</label>
-          <input type="text" id="ce-subheading" class="form-control">
+        <div class="row mb-2">
+          <div class="col-6">
+            <label class="form-label">Subheading (PL)</label>
+            <input type="text" id="ce-subheading-pl" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Subheading (EN)</label>
+            <input type="text" id="ce-subheading-en" class="form-control">
+          </div>
         </div>
-        <div class="mb-2">
-          <label class="form-label">Text when no badge is required</label>
-          <textarea id="ce-body" class="form-control" rows="2"></textarea>
+        <div class="row mb-2">
+          <div class="col-6">
+            <label class="form-label">Text when no badge is required (PL)</label>
+            <textarea id="ce-body-pl" class="form-control" rows="2"></textarea>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Text when no badge is required (EN)</label>
+            <textarea id="ce-body-en" class="form-control" rows="2"></textarea>
+          </div>
         </div>
-        <div class="mb-2">
-          <label class="form-label">Footer note</label>
-          <input type="text" id="ce-footer" class="form-control">
+        <div class="row mb-2">
+          <div class="col-6">
+            <label class="form-label">Badge issuance note (PL)</label>
+            <input type="text" id="ce-badgenote-pl" class="form-control" placeholder="e.g. Naklejkę wyda Ci pracownik recepcji.">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Badge issuance note (EN)</label>
+            <input type="text" id="ce-badgenote-en" class="form-control" placeholder="e.g. Your badge will be issued by reception staff.">
+          </div>
+        </div>
+        <div class="form-text mb-2">Shown under the badge color, only when a badge is required.</div>
+        <div class="row mb-2">
+          <div class="col-6">
+            <label class="form-label">Footer note (PL)</label>
+            <input type="text" id="ce-footer-pl" class="form-control">
+          </div>
+          <div class="col-6">
+            <label class="form-label">Footer note (EN)</label>
+            <input type="text" id="ce-footer-en" class="form-control">
+          </div>
         </div>
         <div class="form-check" id="ce-print-wrap" style="display:none;">
           <input type="checkbox" class="form-check-input" id="ce-print">
@@ -199,14 +241,21 @@ document.addEventListener('DOMContentLoaded', function () {
   const modal = new bootstrap.Modal(modalEl);
   let activeBlock = null;
 
+  const CE_FIELDS = [
+    ['ce-heading-pl', 'headingPl'], ['ce-heading-en', 'headingEn'],
+    ['ce-subheading-pl', 'subheadingPl'], ['ce-subheading-en', 'subheadingEn'],
+    ['ce-body-pl', 'bodyPl'], ['ce-body-en', 'bodyEn'],
+    ['ce-footer-pl', 'footerPl'], ['ce-footer-en', 'footerEn'],
+    ['ce-badgenote-pl', 'badgenotePl'], ['ce-badgenote-en', 'badgenoteEn'],
+  ];
+
   document.querySelectorAll('.completion-block').forEach(function (block) {
     block.addEventListener('click', function () {
       activeBlock = block;
       document.getElementById('ce-screen').value = block.dataset.screen;
-      document.getElementById('ce-heading').value = block.dataset.heading || '';
-      document.getElementById('ce-subheading').value = block.dataset.subheading || '';
-      document.getElementById('ce-body').value = block.dataset.body || '';
-      document.getElementById('ce-footer').value = block.dataset.footer || '';
+      CE_FIELDS.forEach(function ([inputId, dataKey]) {
+        document.getElementById(inputId).value = block.dataset[dataKey] || '';
+      });
       document.getElementById('ce-status').textContent = '';
       const printWrap = document.getElementById('ce-print-wrap');
       if (block.dataset.showPrint === 'true') {
@@ -224,10 +273,16 @@ document.addEventListener('DOMContentLoaded', function () {
     statusEl.textContent = 'Saving...';
     const payload = {
       screen: document.getElementById('ce-screen').value,
-      heading: document.getElementById('ce-heading').value,
-      subheading: document.getElementById('ce-subheading').value,
-      body_no_badge: document.getElementById('ce-body').value,
-      footer_note: document.getElementById('ce-footer').value,
+      heading_pl: document.getElementById('ce-heading-pl').value,
+      heading_en: document.getElementById('ce-heading-en').value,
+      subheading_pl: document.getElementById('ce-subheading-pl').value,
+      subheading_en: document.getElementById('ce-subheading-en').value,
+      body_no_badge_pl: document.getElementById('ce-body-pl').value,
+      body_no_badge_en: document.getElementById('ce-body-en').value,
+      footer_note_pl: document.getElementById('ce-footer-pl').value,
+      footer_note_en: document.getElementById('ce-footer-en').value,
+      badge_issuance_note_pl: document.getElementById('ce-badgenote-pl').value,
+      badge_issuance_note_en: document.getElementById('ce-badgenote-en').value,
     };
     if (document.getElementById('ce-print-wrap').style.display !== 'none') {
       payload.print_popup_enabled = document.getElementById('ce-print').checked ? 'true' : 'false';
@@ -235,10 +290,16 @@ document.addEventListener('DOMContentLoaded', function () {
     postForm("{% url 'completion_content_save' %}", payload).then(function (res) {
       if (!res.ok) { statusEl.textContent = 'Error saving.'; return; }
       if (activeBlock) {
-        activeBlock.dataset.heading = payload.heading;
-        activeBlock.dataset.subheading = payload.subheading;
-        activeBlock.dataset.body = payload.body_no_badge;
-        activeBlock.dataset.footer = payload.footer_note;
+        activeBlock.dataset.headingPl = payload.heading_pl;
+        activeBlock.dataset.headingEn = payload.heading_en;
+        activeBlock.dataset.subheadingPl = payload.subheading_pl;
+        activeBlock.dataset.subheadingEn = payload.subheading_en;
+        activeBlock.dataset.bodyPl = payload.body_no_badge_pl;
+        activeBlock.dataset.bodyEn = payload.body_no_badge_en;
+        activeBlock.dataset.footerPl = payload.footer_note_pl;
+        activeBlock.dataset.footerEn = payload.footer_note_en;
+        activeBlock.dataset.badgenotePl = payload.badge_issuance_note_pl;
+        activeBlock.dataset.badgenoteEn = payload.badge_issuance_note_en;
         if (payload.print_popup_enabled !== undefined) activeBlock.dataset.print = payload.print_popup_enabled;
       }
       statusEl.textContent = 'Saved.';

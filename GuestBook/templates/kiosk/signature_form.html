@@ -64,6 +64,7 @@
 const canvas = document.getElementById("signature-pad");
 const ctx = canvas.getContext("2d");
 let drawing = false;
+canvas.style.touchAction = 'none';
 
 canvas.onmousedown = (e) => {
   drawing = true;
@@ -81,6 +82,33 @@ canvas.onmousemove = (e) => {
   ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
   ctx.stroke();
 };
+
+function touchPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const t = e.touches[0];
+  return { x: t.clientX - rect.left, y: t.clientY - rect.top };
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  drawing = true;
+  const p = touchPos(e);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = touchPos(e);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  drawing = false;
+}, { passive: false });
 
 function saveSignature() {
   document.getElementById("signature_data").value = canvas.toDataURL();

@@ -363,6 +363,22 @@ def _require_method_active(slug, request):
     return None
 
 
+def _completion_screen_context(request, screen: str) -> dict:
+    """Resolved, language-aware text for a kiosk completion screen (manual/
+    badge/code) — see CompletionScreenContent.get_text(). Also returns the raw
+    `content` object so templates can still check `content.print_popup_enabled`."""
+    lang = request.session.get(settings.LANGUAGE_COOKIE_NAME, 'pl')
+    content = CompletionScreenContent.get_for(screen)
+    return {
+        'content': content,
+        'heading': content.get_text('heading', lang),
+        'subheading': content.get_text('subheading', lang),
+        'body_no_badge': content.get_text('body_no_badge', lang),
+        'footer_note': content.get_text('footer_note', lang),
+        'badge_issuance_note': content.get_text('badge_issuance_note', lang),
+    }
+
+
 def choose_method_view(request):
     lang = request.session.get(settings.LANGUAGE_COOKIE_NAME, 'pl')
     tiles = []
@@ -370,9 +386,17 @@ def choose_method_view(request):
         meta = METHOD_TILE_META.get(method.slug)
         if meta:
             tiles.append({'label': method.get_label(lang), **meta})
+
+    unavailable = request.GET.get('unavailable')
+    # Skip the picker entirely when there's only one option — but not right
+    # after bouncing back here because a method just got disabled, so the
+    # visitor still sees why they were sent back.
+    if len(tiles) == 1 and not unavailable:
+        return redirect(tiles[0]['url_name'])
+
     return render(request, 'kiosk/choose_method.html', {
         'tiles': tiles,
-        'unavailable': request.GET.get('unavailable'),
+        'unavailable': unavailable,
     })
 
 def enter_visitor_id(request):
@@ -722,7 +746,7 @@ def finish_registration(request, visitor_id):
         'is_production': visitor.production_area,
         'zpl_for_print': zpl_for_print,
         'visitor_id': visitor.pk,
-        'content': CompletionScreenContent.get_for('manual'),
+        **_completion_screen_context(request, 'manual'),
     })
 
 
@@ -1098,7 +1122,7 @@ def finish_registration_trusted_view(request, visitor_id):
         'badge_css': badge_css,
         'is_production': visitor.production_area,
         'show_badge': show_badge,
-        'content': CompletionScreenContent.get_for('badge'),
+        **_completion_screen_context(request, 'badge'),
     })
 
 import threading
@@ -1565,7 +1589,7 @@ def complete_code_view(request, reservation_id=None):
         'badge_color': badge_color,
         'badge_css': badge_css,
         'is_production': visitor.production_area,
-        'content': CompletionScreenContent.get_for('code'),
+        **_completion_screen_context(request, 'code'),
     })
 
 
@@ -2036,6 +2060,25 @@ def visitor_edit_view(request, pk):
     })
 
 
+from django.views.decorators.http import require_POST
+
+
+@login_required
+@require_POST
+def visitor_delete_view(request, pk):
+    """Let Helpdesk/Admin permanently remove a GuestBook history record —
+    previously there was no way to delete a Visitor at all."""
+    if not _require_helpdesk(request.user):
+        messages.error(request, "You do not have permission to delete visitor records.")
+        return redirect("visitor_detail", pk=pk)
+
+    visitor = get_object_or_404(Visitor, pk=pk)
+    visitor.delete()
+    messages.success(request, "Visitor record deleted.")
+    next_url = clean_next_url(request.POST.get("next", ""))
+    return redirect(next_url or "dashboard")
+
+
 def generate_bhp_pdf_view(request, pk):
     guest = get_object_or_404(Visitor, pk=pk)
 
@@ -2315,6 +2358,28 @@ def reprint_badge_view(request, pk):
 def pending_approvals(request):
     unapproved = Visitor.objects.filter(approved=False).order_by('-start_time')
     return render(request, 'panel/pending_approvals.html', {'unapproved_visitors': unapproved})
+
+
+@login_required
+def notifications_status(request):
+    """Unseen count of new kiosk self-registrations for the notification bell
+    — reuses the existing pending-approvals queue (every kiosk registration
+    is created with approved=False); 'seen' is tracked per staff member."""
+    profile, _ = AdminProfile.objects.get_or_create(user=request.user)
+    seen_at = profile.notifications_seen_at
+    qs = Visitor.objects.filter(approved=False)
+    if seen_at:
+        qs = qs.filter(start_time__gt=seen_at)
+    return JsonResponse({'count': qs.count()})
+
+
+@login_required
+@require_POST
+def notifications_mark_seen(request):
+    profile, _ = AdminProfile.objects.get_or_create(user=request.user)
+    profile.notifications_seen_at = timezone.now()
+    profile.save(update_fields=['notifications_seen_at'])
+    return JsonResponse({'ok': True})
 
 
 @login_required
@@ -3968,9 +4033,11 @@ def registration_stage_toggle(request):
 @require_POST
 def completion_content_save(request):
     content = get_object_or_404(CompletionScreenContent, screen=request.POST.get('screen'))
-    for field in ('heading', 'subheading', 'body_no_badge', 'footer_note'):
-        if field in request.POST:
-            setattr(content, field, request.POST.get(field, ''))
+    for field in ('heading', 'subheading', 'body_no_badge', 'footer_note', 'badge_issuance_note'):
+        for suffix in ('_pl', '_en'):
+            key = f'{field}{suffix}'
+            if key in request.POST:
+                setattr(content, key, request.POST.get(key, ''))
     if content.screen == 'manual':
         content.print_popup_enabled = request.POST.get('print_popup_enabled') == 'true'
     content.updated_by = request.user

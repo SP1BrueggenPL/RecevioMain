@@ -133,6 +133,12 @@ class AdminProfile(models.Model):
     pin_hash = models.CharField(max_length=128, blank=True, default="")
     pin_set_at = models.DateTimeField(null=True, blank=True)
 
+    # Per-staff-member "last checked the notification bell" marker — see
+    # views.notifications_status/notifications_mark_seen. Deliberately not a
+    # site-wide singleton (unlike KioskSettings.get()): one staff member
+    # checking it must not clear the badge for everyone else.
+    notifications_seen_at = models.DateTimeField(null=True, blank=True)
+
     def has_pin(self) -> bool:
         return bool(self.pin_hash)
 
@@ -344,6 +350,21 @@ class CompletionScreenContent(models.Model):
     subheading = models.CharField(max_length=300, blank=True, default='')
     body_no_badge = models.TextField(blank=True, default='')
     footer_note = models.CharField(max_length=300, blank=True, default='')
+
+    # Per-language variants (see get_text()) — heading/subheading/body_no_badge/
+    # footer_note above are legacy single-language fields, kept as a fallback
+    # for any row these weren't backfilled on.
+    heading_pl = models.CharField(max_length=200, blank=True, default='')
+    heading_en = models.CharField(max_length=200, blank=True, default='')
+    subheading_pl = models.CharField(max_length=300, blank=True, default='')
+    subheading_en = models.CharField(max_length=300, blank=True, default='')
+    body_no_badge_pl = models.TextField(blank=True, default='')
+    body_no_badge_en = models.TextField(blank=True, default='')
+    footer_note_pl = models.CharField(max_length=300, blank=True, default='')
+    footer_note_en = models.CharField(max_length=300, blank=True, default='')
+    badge_issuance_note_pl = models.CharField(max_length=300, blank=True, default='')
+    badge_issuance_note_en = models.CharField(max_length=300, blank=True, default='')
+
     print_popup_enabled = models.BooleanField(default=False)
     updated_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(
@@ -361,6 +382,20 @@ class CompletionScreenContent(models.Model):
     def get_for(cls, screen: str) -> "CompletionScreenContent":
         obj, _ = cls.objects.get_or_create(screen=screen)
         return obj
+
+    def get_text(self, field: str, lang: str) -> str:
+        """Kiosk-facing text for `field` ('heading'/'subheading'/'body_no_badge'/
+        'footer_note'/'badge_issuance_note') in the given language. Falls back to
+        the other language's variant, then (for the 4 original fields, which
+        predate the PL/EN split) the legacy single-language field of the same name."""
+        is_pl = bool(lang) and lang.startswith('pl')
+        primary = getattr(self, f'{field}_pl' if is_pl else f'{field}_en')
+        if primary:
+            return primary
+        other = getattr(self, f'{field}_en' if is_pl else f'{field}_pl')
+        if other:
+            return other
+        return getattr(self, field, '')
 
 
 class Package(models.Model):

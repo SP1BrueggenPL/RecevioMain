@@ -55,6 +55,8 @@ urlpatterns = [
     path('statistics/', views.statistics_view, name='statistics'),
     path('approvals/', views.pending_approvals, name='pending_approvals'),
     path('approve/<int:pk>/', views.approve_visitor, name='approve_visitor'),
+    path('notifications/status/', views.notifications_status, name='notifications_status'),
+    path('notifications/mark-seen/', views.notifications_mark_seen, name='notifications_mark_seen'),
     path('coming-visitors/', views.coming_visitors_view, name='coming_visitors'),
     # path('reservations/', views.reservation, name='reservation'),  # Self-service booking: retired, reception issues reservations now
     # path('reservations/new/', views.reservation_create_view, name='reservation_create'),  # Self-service booking: retired
@@ -85,6 +87,7 @@ urlpatterns = [
     path("trusted/<int:pk>/delete/", views.trusted_delete, name="trusted_delete"),
 
     path("visitor/<int:pk>/edit/", views.visitor_edit_view, name="visitor_edit"),
+    path("visitor/<int:pk>/delete/", views.visitor_delete_view, name="visitor_delete"),
     # path("reservations_visitors/", views.reservation_visitor_view, name="reservation_visitor"),  # Reservations disabled
     # path("reservations_visitors/<int:pk>/edit/", views.reservation_visitor_edit_view, name="reservation_visitor_edit"),  # Reservations disabled
     # path("reservations/add/", views.reservation_add_view, name="reservation_add"),  # Reservations disabled

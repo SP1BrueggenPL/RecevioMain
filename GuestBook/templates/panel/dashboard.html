@@ -31,6 +31,9 @@
                   <th>ID</th>
                   <th>Status</th>
                   <th>Details</th>
+                  {% if user.is_authenticated and user|has_group:"Recevio_Helpdesk" or user.is_superuser %}
+                    <th>Delete</th>
+                  {% endif %}
                 </tr>
               </thead>
               <tbody>
@@ -70,9 +73,21 @@
 <td>
                     <a href="{% url 'visitor_detail' g.id %}" class="btn btn-sm btn-outline-primary">Preview</a>
                   </td>
+                  {% if user.is_authenticated and user|has_group:"Recevio_Helpdesk" or user.is_superuser %}
+                  <td>
+                    <form method="post" action="{% url 'visitor_delete' g.id %}"
+                          onsubmit="return confirm('Permanently delete this visitor record? This cannot be undone.');">
+                      {% csrf_token %}
+                      <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                      <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="fa fa-trash"></i>
+                      </button>
+                    </form>
+                  </td>
+                  {% endif %}
                 </tr>
                 {% empty %}
-                <tr><td colspan="9">No results</td></tr>
+                <tr><td colspan="10">No results</td></tr>
                 {% endfor %}
               </tbody>
             </table>

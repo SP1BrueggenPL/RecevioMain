@@ -328,31 +328,44 @@ class CompletionScreenContentTemplateTests(KioskRoutingTestCase):
         response = self.client.get(reverse("choose_method"))  # sanity: app boots
         self.assertEqual(response.status_code, 200)
 
+    @staticmethod
+    def _ctx(content, lang="pl", **extra):
+        ctx = {
+            "content": content,
+            "heading": content.get_text("heading", lang),
+            "subheading": content.get_text("subheading", lang),
+            "body_no_badge": content.get_text("body_no_badge", lang),
+            "footer_note": content.get_text("footer_note", lang),
+            "badge_issuance_note": content.get_text("badge_issuance_note", lang),
+        }
+        ctx.update(extra)
+        return ctx
+
     def test_complete_html_omits_popup_when_disabled(self):
         from django.template.loader import render_to_string
         content = CompletionScreenContent.get_for("manual")
         content.print_popup_enabled = False
-        html = render_to_string("kiosk/complete.html", {
-            "is_production": True, "visitor_id": 1, "content": content,
-        })
+        html = render_to_string("kiosk/complete.html", self._ctx(
+            content, is_production=True, visitor_id=1,
+        ))
         self.assertNotIn("window.open(", html)
 
     def test_complete_html_includes_popup_when_enabled(self):
         from django.template.loader import render_to_string
         content = CompletionScreenContent.get_for("manual")
         content.print_popup_enabled = True
-        html = render_to_string("kiosk/complete.html", {
-            "is_production": True, "visitor_id": 1, "content": content,
-        })
+        html = render_to_string("kiosk/complete.html", self._ctx(
+            content, is_production=True, visitor_id=1,
+        ))
         self.assertIn("window.open(", html)
 
     def test_custom_heading_appears_on_screen(self):
         from django.template.loader import render_to_string
         content = CompletionScreenContent.get_for("code")
-        content.heading = "Dziękujemy za rejestrację!"
-        html = render_to_string("kiosk/complete_code.html", {
-            "is_production": False, "content": content,
-        })
+        content.heading_pl = "Dziękujemy za rejestrację!"
+        html = render_to_string("kiosk/complete_code.html", self._ctx(
+            content, lang="pl", is_production=False,
+        ))
         self.assertIn("Dziękujemy za rejestrację!", html)
 
 
@@ -775,3 +788,154 @@ class AccountDeactivationTests(KioskRoutingTestCase):
     def test_active_user_can_still_log_in_via_chip_pin(self):
         user = ChipPinBackend().authenticate(None, chip_number="55555", pin="123456")
         self.assertEqual(user, self.target_user)
+
+
+class CompletionScreenContentI18nTests(KioskRoutingTestCase):
+    def test_get_text_prefers_requested_language(self):
+        content = CompletionScreenContent.get_for("manual")
+        content.heading_pl = "Zarejestrowano"
+        content.heading_en = "Registered"
+        content.save(update_fields=["heading_pl", "heading_en"])
+        self.assertEqual(content.get_text("heading", "pl"), "Zarejestrowano")
+        self.assertEqual(content.get_text("heading", "en"), "Registered")
+
+    def test_get_text_falls_back_to_other_language_then_legacy(self):
+        content = CompletionScreenContent.get_for("manual")
+        content.heading_pl = ""
+        content.heading_en = "Registered"
+        content.heading = "Legacy heading"
+        content.save(update_fields=["heading_pl", "heading_en", "heading"])
+        self.assertEqual(content.get_text("heading", "pl"), "Registered")
+
+        content.heading_en = ""
+        content.save(update_fields=["heading_en"])
+        self.assertEqual(content.get_text("heading", "pl"), "Legacy heading")
+
+    def test_badge_issuance_note_rendered_only_when_production(self):
+        from django.template.loader import render_to_string
+        CompletionScreenContent.objects.filter(screen="code").update(
+            badge_issuance_note_pl="Naklejkę wyda recepcja.",
+            badge_issuance_note_en="Reception will issue the badge.",
+        )
+        content = CompletionScreenContent.get_for("code")
+        html_production = render_to_string("kiosk/complete_code.html", {
+            "content": content, "is_production": True, "badge_color": "Green",
+            "heading": content.get_text("heading", "pl"),
+            "subheading": content.get_text("subheading", "pl"),
+            "body_no_badge": content.get_text("body_no_badge", "pl"),
+            "footer_note": content.get_text("footer_note", "pl"),
+            "badge_issuance_note": content.get_text("badge_issuance_note", "pl"),
+        })
+        self.assertIn("Naklejkę wyda recepcja.", html_production)
+
+        html_no_badge = render_to_string("kiosk/complete_code.html", {
+            "content": content, "is_production": False,
+            "heading": content.get_text("heading", "pl"),
+            "subheading": content.get_text("subheading", "pl"),
+            "body_no_badge": content.get_text("body_no_badge", "pl"),
+            "footer_note": content.get_text("footer_note", "pl"),
+            "badge_issuance_note": content.get_text("badge_issuance_note", "pl"),
+        })
+        self.assertNotIn("Naklejkę wyda recepcja.", html_no_badge)
+
+
+class ChooseMethodAutoSkipTests(KioskRoutingTestCase):
+    def test_redirects_straight_to_the_only_active_method(self):
+        RegistrationMethod.objects.exclude(slug="badge").update(is_active=False)
+        RegistrationMethod.objects.filter(slug="badge").update(is_active=True)
+        response = self.client.get(reverse("choose_method"))
+        self.assertRedirects(response, reverse("enter_badge"), fetch_redirect_response=False)
+
+    def test_still_shows_picker_when_exit_also_active(self):
+        RegistrationMethod.objects.exclude(slug__in=["badge", "exit"]).update(is_active=False)
+        RegistrationMethod.objects.filter(slug__in=["badge", "exit"]).update(is_active=True)
+        response = self.client.get(reverse("choose_method"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_still_shows_picker_with_multiple_registration_methods(self):
+        RegistrationMethod.objects.filter(slug__in=["manual", "badge"]).update(is_active=True)
+        RegistrationMethod.objects.exclude(slug__in=["manual", "badge"]).update(is_active=False)
+        response = self.client.get(reverse("choose_method"))
+        self.assertEqual(response.status_code, 200)
+
+    def test_does_not_auto_skip_right_after_a_method_was_disabled(self):
+        RegistrationMethod.objects.exclude(slug="badge").update(is_active=False)
+        RegistrationMethod.objects.filter(slug="badge").update(is_active=True)
+        response = self.client.get(reverse("choose_method"), {"unavailable": "code"})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "currently unavailable")
+
+
+class NotificationsBellTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.staff = _make_helpdesk_user()
+        self.client.force_login(self.staff)
+
+    def _make_kiosk_visitor(self, **kwargs):
+        defaults = dict(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved=False,
+        )
+        defaults.update(kwargs)
+        return Visitor.objects.create(**defaults)
+
+    def test_status_counts_unapproved_visitors(self):
+        self._make_kiosk_visitor()
+        self._make_kiosk_visitor(visitor_id="002")
+        resp = self.client.get(reverse("notifications_status"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json()["count"], 2)
+
+    def test_approved_visitors_are_not_counted(self):
+        self._make_kiosk_visitor(approved=True)
+        resp = self.client.get(reverse("notifications_status"))
+        self.assertEqual(resp.json()["count"], 0)
+
+    def test_mark_seen_only_hides_older_registrations(self):
+        self._make_kiosk_visitor()
+        self.client.post(reverse("notifications_mark_seen"))
+        resp = self.client.get(reverse("notifications_status"))
+        self.assertEqual(resp.json()["count"], 0)
+
+        self._make_kiosk_visitor(visitor_id="003")
+        resp = self.client.get(reverse("notifications_status"))
+        self.assertEqual(resp.json()["count"], 1)
+
+    def test_mark_seen_only_affects_the_caller(self):
+        self._make_kiosk_visitor()
+        self.client.post(reverse("notifications_mark_seen"))
+
+        other_staff = _make_reception_user()
+        self.client.logout()
+        self.client.force_login(other_staff)
+        resp = self.client.get(reverse("notifications_status"))
+        self.assertEqual(resp.json()["count"], 1)
+
+
+class VisitorDeleteTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+
+    def test_helpdesk_can_delete_visitor(self):
+        self.client.force_login(_make_helpdesk_user())
+        resp = self.client.post(reverse("visitor_delete", args=[self.visitor.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertFalse(Visitor.objects.filter(pk=self.visitor.pk).exists())
+
+    def test_non_helpdesk_user_cannot_delete_visitor(self):
+        User.objects.create_user("plainuser4", password="pw")
+        self.client.login(username="plainuser4", password="pw")
+        resp = self.client.post(reverse("visitor_delete", args=[self.visitor.pk]))
+        self.assertEqual(resp.status_code, 302)
+        self.assertTrue(Visitor.objects.filter(pk=self.visitor.pk).exists())
+
+    def test_get_request_is_not_allowed(self):
+        self.client.force_login(_make_helpdesk_user())
+        resp = self.client.get(reverse("visitor_delete", args=[self.visitor.pk]))
+        self.assertEqual(resp.status_code, 405)
+        self.assertTrue(Visitor.objects.filter(pk=self.visitor.pk).exists())
