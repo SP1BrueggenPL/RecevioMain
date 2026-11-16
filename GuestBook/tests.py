@@ -939,3 +939,21 @@ class VisitorDeleteTests(KioskRoutingTestCase):
         resp = self.client.get(reverse("visitor_delete", args=[self.visitor.pk]))
         self.assertEqual(resp.status_code, 405)
         self.assertTrue(Visitor.objects.filter(pk=self.visitor.pk).exists())
+
+    def test_dashboard_renders_delete_column_for_helpdesk(self):
+        """Regression: dashboard.html uses the has_group filter in its own
+        {% if %} (the Delete column header/button) — {% load %} tags don't
+        inherit through {% extends %}, so this crashed with a
+        TemplateSyntaxError in production until dashboard.html got its own
+        {% load user_groups %}."""
+        self.client.force_login(_make_helpdesk_user())
+        resp = self.client.get(reverse("dashboard"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, reverse("visitor_delete", args=[self.visitor.pk]))
+
+    def test_dashboard_renders_for_non_helpdesk_user(self):
+        plain = User.objects.create_user("plainuser5", password="pw")
+        self.client.force_login(plain)
+        resp = self.client.get(reverse("dashboard"))
+        self.assertEqual(resp.status_code, 200)
+        self.assertNotContains(resp, reverse("visitor_delete", args=[self.visitor.pk]))
