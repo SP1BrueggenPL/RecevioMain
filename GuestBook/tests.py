@@ -1074,6 +1074,38 @@ class StaffSignatureResolutionTests(TestCase):
         path = _resolve_staff_signature_path(visitor)
         self.assertIn("host_signatures", path)
 
+    def test_prefers_approved_by_over_returned_by(self):
+        approver = User.objects.create_user("approver1", password="pw")
+        approver_profile = AdminProfile.objects.create(user=approver)
+        approver_profile.signature = "admin_signatures/approver.png"
+        approver_profile.save(update_fields=["signature"])
+
+        returner = User.objects.create_user("returner1", password="pw")
+        returner_profile = AdminProfile.objects.create(user=returner)
+        returner_profile.signature = "admin_signatures/returner.png"
+        returner_profile.save(update_fields=["signature"])
+
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            approved_by=approver, returned_by=returner,
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("approver.png", path)
+
+    def test_host_signature_still_wins_over_approved_by(self):
+        approver = User.objects.create_user("approver2", password="pw")
+        profile = AdminProfile.objects.create(user=approver)
+        profile.signature = "admin_signatures/approver.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            approved_by=approver, host_signature="host_signatures/fake.png",
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("host_signatures", path)
+
 
 class ConfirmGuestListTests(KioskRoutingTestCase):
     def test_lists_approved_present_unsigned_visitor(self):
@@ -1245,3 +1277,71 @@ class HostImportTests(KioskRoutingTestCase):
         host = Host.objects.get(host_name="Jan Kowalski")
         self.assertEqual(host.phone, "668376832")
         self.assertEqual(host.email, "jan.kowalski@brueggen.com")
+
+
+class VisitorIdTwoOrThreeCharsTests(KioskRoutingTestCase):
+    """The ID-entry screens hard-coded 'exactly 3 characters' client-side
+    (enter_id.html and its two duplicates) — now accept 2 or 3. There was
+    never a server-side length restriction, so this just locks in that a
+    2-char ID keeps working end to end and the templates advertise the new
+    range to the browser/virtual keyboard."""
+
+    def test_enter_visitor_id_accepts_a_two_character_id(self):
+        resp = self.client.post(reverse("enter_id"), {"visitor_id": "42"})
+        self.assertRedirects(resp, reverse("guest_form", args=["42"]))
+
+    def test_enter_id_template_advertises_2_to_3_chars(self):
+        response = self.client.get(reverse("enter_id"))
+        self.assertContains(response, 'pattern=".{2,3}"')
+
+
+class VisitorDetailDisplayTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def test_shows_real_question_text_not_generic_labels(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=True,
+            safety_question_1="Nie", safety_question_2="Polska", safety_question_3="Nie",
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Which countries have you visited in the past four weeks?")
+        self.assertNotContains(response, "Question 1:")
+        self.assertNotContains(response, "Question 2:")
+        self.assertNotContains(response, "Question 3:")
+
+    def test_shows_approver_signature_when_present(self):
+        approver = User.objects.create_user("approver3", password="pw")
+        profile = AdminProfile.objects.create(user=approver)
+        profile.signature = "admin_signatures/approver.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved_by=approver,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Approver Signature")
+
+    def test_shows_placeholder_when_approver_has_no_saved_signature(self):
+        approver = User.objects.create_user("approver4", password="pw")
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved_by=approver,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "No saved signature on this admin's profile yet.")
+
+
+class NearbyPersonsDisplayTests(KioskRoutingTestCase):
+    def test_renders_without_send_print_columns(self):
+        self.client.force_login(_make_helpdesk_user())
+        Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("nearby_persons"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<th>Send</th>")
+        self.assertNotContains(response, "<th>Print</th>")

@@ -60,9 +60,9 @@
             <li class="list-group-item"><strong>ID:</strong> {{ guest.visitor_id }}</li>
             <li class="list-group-item"><strong>Production Area:</strong> {% if guest.production_area %}Yes{% else %}No{% endif %}</li>
               {% if guest.production_area %}
-    <li class="list-group-item"><strong>Question 1:</strong> {{ guest.safety_question_1 }}</li>
-    <li class="list-group-item"><strong>Question 2:</strong> {{ guest.safety_question_2 }}</li>
-    <li class="list-group-item"><strong>Question 3:</strong> {{ guest.safety_question_3 }}</li>
+    <li class="list-group-item"><strong>Do you suffer from any illnesses or have other symptoms such as: diarrhoea, vomit, fever, open cutaneous lesions, dark urine?</strong> {{ guest.safety_question_1 }}</li>
+    <li class="list-group-item"><strong>Which countries have you visited in the past four weeks?</strong> {{ guest.safety_question_2 }}</li>
+    <li class="list-group-item"><strong>Are you allergic to any allergens listed in the provided table?</strong> {{ guest.safety_question_3 }}</li>
 {% endif %}
 
 {% if guest.production_area and guest.safety_question_3 in "Yes,Tak" %}
@@ -105,7 +105,14 @@
 </li>
 
               {% if guest.approved_by %}
-  <li class="list-group-item"><strong>Approved By:</strong> {{ guest.approved_by.first_name }} {{ guest.approved_by.last_name }}</li>
+  <li class="list-group-item">
+    <strong>Approved By:</strong> {{ guest.approved_by.first_name }} {{ guest.approved_by.last_name }}<br>
+    {% if guest.approved_by.adminprofile.signature %}
+      <img src="{{ guest.approved_by.adminprofile.signature.url }}" alt="Approver Signature" class="img-fluid mt-2" style="max-width: 300px;">
+    {% else %}
+      <span class="text-muted small">No saved signature on this admin's profile yet.</span>
+    {% endif %}
+  </li>
 {% endif %}
 
             <li class="list-group-item"><strong>Status:</strong>
