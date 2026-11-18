@@ -981,3 +981,32 @@ class VisitorDeleteTests(KioskRoutingTestCase):
         resp = self.client.get(reverse("dashboard"))
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, reverse("visitor_delete", args=[self.visitor.pk]))
+
+
+class ProfilePersonalInfoTests(KioskRoutingTestCase):
+    """Regression: the profile page showed AdminProfile.first_name/last_name/
+    email, duplicate fields that default to '-'/'' and are only ever filled
+    by the LDAP backend — which is disabled (on-prem AD unreachable from
+    Azure). The real, populated values live on auth.User."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            "janek", password="pw",
+            first_name="Jan", last_name="Kowalski", email="jan.kowalski@brueggen.com",
+        )
+        self.client.force_login(self.user)
+
+    def test_profile_shows_the_real_user_fields(self):
+        response = self.client.get(reverse("profile"))
+        self.assertContains(response, "Jan")
+        self.assertContains(response, "Kowalski")
+        self.assertContains(response, "jan.kowalski@brueggen.com")
+
+    def test_profile_does_not_blank_out_when_adminprofile_defaults_are_unset(self):
+        # AdminProfile.first_name/last_name/email default to "-" — confirm the
+        # page no longer renders those placeholders instead of the real name.
+        profile, _ = AdminProfile.objects.get_or_create(user=self.user)
+        self.assertEqual(profile.first_name, "-")
+        response = self.client.get(reverse("profile"))
+        self.assertNotContains(response, "<strong>First Name:</strong> -")

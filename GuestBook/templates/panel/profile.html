@@ -13,10 +13,10 @@
           <div class="mb-4">
             <h5>Personal Information</h5>
             <ul class="list-group">
-              <li class="list-group-item"><strong>First Name:</strong> {{ profile.first_name }}</li>
-              <li class="list-group-item"><strong>Last Name:</strong> {{ profile.last_name }}</li>
-              <li class="list-group-item"><strong>Email:</strong> {{ profile.email }}</li>
-              <li class="list-group-item"><strong>Phone Number:</strong> {{ profile.phone_number }}</li>
+              <li class="list-group-item"><strong>First Name:</strong> {{ user.first_name|default:"-" }}</li>
+              <li class="list-group-item"><strong>Last Name:</strong> {{ user.last_name|default:"-" }}</li>
+              <li class="list-group-item"><strong>Email:</strong> {{ user.email|default:"-" }}</li>
+              <li class="list-group-item"><strong>Phone Number:</strong> {{ profile.phone_number|default:"-" }}</li>
             </ul>
           </div>
 
