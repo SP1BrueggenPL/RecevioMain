@@ -26,9 +26,9 @@
   type="text"
   name="visitor_id"
   maxlength="3"
-  pattern=".{3}"
+  pattern=".{2,3}"
   required
-  title="Wpisz dokładnie 3 znaki"
+  title="Wpisz 2 lub 3 znaki"
   style="padding:15px;width:60%;max-width:500px;font-size:2rem;border:2px solid #ccc;border-radius:8px;margin-bottom:2rem;"
 >
 <br>
@@ -89,11 +89,12 @@
     if (allow > 0) input.setRangeText(t.slice(0, allow), input.selectionStart, input.selectionEnd, 'end');
   });
 
-  // --- 4) Blokada submitu: dokładnie 3 znaki
+  // --- 4) Blokada submitu: 2 lub 3 znaki
+  const MIN = 2;
   form?.addEventListener('submit', (e) => {
-    if (input.value.length !== MAX) {
+    if (input.value.length < MIN || input.value.length > MAX) {
       e.preventDefault();
-      input.setCustomValidity('Wpisz dokładnie 3 znaki');
+      input.setCustomValidity('Wpisz 2 lub 3 znaki');
       input.reportValidity();
       setTimeout(() => input.setCustomValidity(''), 200);
     }

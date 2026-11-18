@@ -1074,6 +1074,38 @@ class StaffSignatureResolutionTests(TestCase):
         path = _resolve_staff_signature_path(visitor)
         self.assertIn("host_signatures", path)
 
+    def test_prefers_approved_by_over_returned_by(self):
+        approver = User.objects.create_user("approver1", password="pw")
+        approver_profile = AdminProfile.objects.create(user=approver)
+        approver_profile.signature = "admin_signatures/approver.png"
+        approver_profile.save(update_fields=["signature"])
+
+        returner = User.objects.create_user("returner1", password="pw")
+        returner_profile = AdminProfile.objects.create(user=returner)
+        returner_profile.signature = "admin_signatures/returner.png"
+        returner_profile.save(update_fields=["signature"])
+
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            approved_by=approver, returned_by=returner,
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("approver.png", path)
+
+    def test_host_signature_still_wins_over_approved_by(self):
+        approver = User.objects.create_user("approver2", password="pw")
+        profile = AdminProfile.objects.create(user=approver)
+        profile.signature = "admin_signatures/approver.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            approved_by=approver, host_signature="host_signatures/fake.png",
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("host_signatures", path)
+
 
 class ConfirmGuestListTests(KioskRoutingTestCase):
     def test_lists_approved_present_unsigned_visitor(self):
@@ -1110,6 +1142,29 @@ class ConfirmGuestListTests(KioskRoutingTestCase):
         )
         response = self.client.get(reverse("confirm_guest_list"))
         self.assertNotContains(response, "Anna")
+
+    def test_list_is_sorted_alphabetically_by_first_name(self):
+        Visitor.objects.create(
+            first_name="Zbigniew", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        Visitor.objects.create(
+            first_name="Anna", last_name="Kowalski", visit_purpose="",
+            visitor_id="002", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        content = response.content.decode()
+        self.assertLess(content.index("Anna"), content.index("Zbigniew"))
+
+    def test_search_input_carries_a_lowercase_name_for_each_row(self):
+        """The template filters client-side on `data-name` — confirm it's
+        actually emitted (lowercased) for the JS to match against."""
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertContains(response, 'data-name="anna nowak"')
 
 
 class ConfirmGuestSignatureTests(KioskRoutingTestCase):
@@ -1222,3 +1277,219 @@ class HostImportTests(KioskRoutingTestCase):
         host = Host.objects.get(host_name="Jan Kowalski")
         self.assertEqual(host.phone, "668376832")
         self.assertEqual(host.email, "jan.kowalski@brueggen.com")
+
+
+class VisitorIdTwoOrThreeCharsTests(KioskRoutingTestCase):
+    """The ID-entry screens hard-coded 'exactly 3 characters' client-side
+    (enter_id.html and its two duplicates) — now accept 2 or 3. There was
+    never a server-side length restriction, so this just locks in that a
+    2-char ID keeps working end to end and the templates advertise the new
+    range to the browser/virtual keyboard."""
+
+    def test_enter_visitor_id_accepts_a_two_character_id(self):
+        resp = self.client.post(reverse("enter_id"), {"visitor_id": "42"})
+        self.assertRedirects(resp, reverse("guest_form", args=["42"]))
+
+    def test_enter_id_template_advertises_2_to_3_chars(self):
+        response = self.client.get(reverse("enter_id"))
+        self.assertContains(response, 'pattern=".{2,3}"')
+
+
+class VisitorDetailDisplayTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def test_shows_real_question_text_not_generic_labels(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=True,
+            safety_question_1="Nie", safety_question_2="Polska", safety_question_3="Nie",
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Which countries have you visited in the past four weeks?")
+        self.assertNotContains(response, "Question 1:")
+        self.assertNotContains(response, "Question 2:")
+        self.assertNotContains(response, "Question 3:")
+
+    def test_shows_approver_signature_when_present(self):
+        approver = User.objects.create_user("approver3", password="pw")
+        profile = AdminProfile.objects.create(user=approver)
+        profile.signature = "admin_signatures/approver.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved_by=approver,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Approver Signature")
+
+    def test_shows_placeholder_when_approver_has_no_saved_signature(self):
+        approver = User.objects.create_user("approver4", password="pw")
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved_by=approver,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "No saved signature on this admin's profile yet.")
+
+
+class NearbyPersonsDisplayTests(KioskRoutingTestCase):
+    def test_renders_without_send_print_columns(self):
+        self.client.force_login(_make_helpdesk_user())
+        Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("nearby_persons"))
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, "<th>Send</th>")
+        self.assertNotContains(response, "<th>Print</th>")
+
+
+class AuditNumberGenerationTests(KioskRoutingTestCase):
+    def test_generates_unique_audit_number_on_first_audit_registration(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False,
+        )
+        session = self.client.session
+        session['registration_mode'] = 'manual'
+        session.save()
+        self.client.get(reverse('finish_registration', args=[visitor.visitor_id]))
+        visitor.refresh_from_db()
+        self.assertIsNotNone(visitor.audit_number)
+        self.assertEqual(len(visitor.audit_number), 6)
+
+    def test_does_not_regenerate_when_already_set(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False, audit_number="ABC123",
+        )
+        session = self.client.session
+        session['registration_mode'] = 'manual'
+        session.save()
+        self.client.get(reverse('finish_registration', args=[visitor.visitor_id]))
+        visitor.refresh_from_db()
+        self.assertEqual(visitor.audit_number, "ABC123")
+
+    def test_non_audit_purpose_gets_no_audit_number(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski",
+            visit_purpose="Business meeting with partners or contractors",
+            visitor_id="001", production_area=False,
+        )
+        session = self.client.session
+        session['registration_mode'] = 'manual'
+        session.save()
+        self.client.get(reverse('finish_registration', args=[visitor.visitor_id]))
+        visitor.refresh_from_db()
+        self.assertIsNone(visitor.audit_number)
+
+    def test_shows_generated_audit_number_on_completion_screen(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False,
+        )
+        session = self.client.session
+        session['registration_mode'] = 'manual'
+        session.save()
+        response = self.client.get(reverse('finish_registration', args=[visitor.visitor_id]))
+        visitor.refresh_from_db()
+        self.assertContains(response, visitor.audit_number)
+
+
+class EnterAuditNumberTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.original = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False, audit_number="ABC123",
+        )
+
+    def test_unknown_number_shows_error(self):
+        response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ZZZZZZ'})
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid audit number")
+
+    def test_valid_number_redirects_to_id_entry(self):
+        response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'abc123'})
+        self.assertRedirects(response, reverse('enter_visitor_id_for_audit'))
+        self.assertEqual(self.client.session['audit_number'], 'ABC123')
+
+    def test_rejects_date_outside_audit_range(self):
+        self.original.audit_start_date = timezone.localdate() - timedelta(days=10)
+        self.original.audit_end_date = timezone.localdate() - timedelta(days=9)
+        self.original.save()
+        response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ABC123'})
+        self.assertContains(response, "not valid today")
+
+    def test_accepts_date_inside_audit_range(self):
+        today = timezone.localdate()
+        self.original.audit_start_date = today
+        self.original.audit_end_date = today
+        self.original.save()
+        response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ABC123'})
+        self.assertRedirects(response, reverse('enter_visitor_id_for_audit'))
+
+
+class AuditContinuationFlowTests(KioskRoutingTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp(prefix="recevio-test-media-")
+        cls._media_root_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_root_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_root_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.host = Host.objects.create(host_name="Host A", phone="123456789")
+        self.original = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=True, with_supervision=True,
+            audit_number="ABC123", host=self.host, approved=True,
+            safety_question_1="Nie", safety_question_2="Polska", safety_question_3="Nie",
+        )
+
+    def _walk_the_flow(self, new_id="02"):
+        self.client.post(reverse('enter_audit_number'), {'audit_number': 'ABC123'})
+        self.client.post(reverse('enter_visitor_id_for_audit'), {'visitor_id': new_id})
+        return self.client.post(
+            reverse('signature_for_audit'),
+            {'signature_data': 'data:image/png;base64,eA=='},
+            follow=True,
+        )
+
+    def test_creates_a_new_visitor_row_with_copied_fields(self):
+        response = self._walk_the_flow()
+        self.assertEqual(Visitor.objects.count(), 2)
+        new_visitor = Visitor.objects.exclude(pk=self.original.pk).get()
+
+        self.assertEqual(new_visitor.visitor_id, '02')
+        self.assertEqual(new_visitor.first_name, 'Jan')
+        self.assertEqual(new_visitor.last_name, 'Kowalski')
+        self.assertEqual(new_visitor.visit_purpose, 'audit')
+        self.assertEqual(new_visitor.audit_number, 'ABC123')
+        self.assertEqual(new_visitor.host_id, self.host.id)
+        self.assertTrue(new_visitor.production_area)
+        self.assertEqual(new_visitor.safety_question_1, 'Nie')
+        self.assertTrue(new_visitor.signed)
+
+        # Each day is independently trackable: its own approval/host-confirmation,
+        # not inherited from the original visit.
+        self.assertFalse(new_visitor.approved)
+        self.assertFalse(new_visitor.host_signature)
+
+        self.assertContains(response, 'ABC123')
+
+    def test_original_visit_is_untouched(self):
+        self._walk_the_flow()
+        self.original.refresh_from_db()
+        self.assertTrue(self.original.approved)
+        self.assertEqual(self.original.visitor_id, '001')

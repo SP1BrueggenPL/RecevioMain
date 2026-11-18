@@ -23,8 +23,6 @@
                   <th>ID</th>
                   <th>Start</th>
                   <th>Status</th>
-                    <th>Send</th>
-                    <th>Print</th>
                   <th></th>
                 </tr>
               </thead>
@@ -47,33 +45,6 @@
                     <td>{{ g.visitor_id }}</td>
                     <td>{{ g.start_time|date:"d.m.Y, H:i" }}</td>
                     <td><span class="badge badge-warning">Open</span></td>
-                    <td>
-  {% if g.sms_status == "sent" %}
-    <span class="badge bg-success">OK</span>
-  {% elif g.sms_status == "timeout" %}
-    <span class="badge bg-warning text-dark">Timeout</span>
-  {% elif g.sms_status == "error" %}
-    <span class="badge bg-danger">Error</span>
-  {% elif g.sms_status == "skipped" %}
-    <span class="badge bg-secondary">Skipped</span>
-  {% else %}
-    <span class="badge bg-light text-dark">Pending</span>
-  {% endif %}
-</td>
-<td>
-  {% if g.print_status == "printed" %}
-    <span class="badge bg-success">OK</span>
-  {% elif g.print_status == "timeout" %}
-    <span class="badge bg-warning text-dark">Timeout</span>
-  {% elif g.print_status == "error" %}
-    <span class="badge bg-danger">Error</span>
-  {% elif g.print_status == "skipped" %}
-    <span class="badge bg-secondary">Skipped</span>
-  {% else %}
-    <span class="badge bg-light text-dark">Pending</span>
-  {% endif %}
-</td>
-
 
                     <td>
   {% if g.visitor_id|length <= 3 %}

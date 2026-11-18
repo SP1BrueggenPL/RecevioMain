@@ -351,6 +351,9 @@ METHOD_TILE_META = {
     'badge': {'url_name': 'enter_badge', 'icon': 'images/chip.png', 'alt': 'badge'},
     'code': {'url_name': 'enter_code', 'icon': 'images/sms_code.png', 'alt': 'code'},
     'exit': {'url_name': 'exit_badge', 'icon': 'images/exit.png', 'alt': 'Exit'},
+    # Reuses the manual-registration icon as a placeholder — no dedicated
+    # artwork exists yet for this tile.
+    'audit_continuation': {'url_name': 'enter_audit_number', 'icon': 'images/manual_registration.png', 'alt': 'Audit continuation'},
 }
 
 
@@ -728,6 +731,17 @@ def finish_registration(request, visitor_id):
         visitor.sms_status = "error"
         visitor.save(update_fields=["sms_status"])
 
+    # Audit purpose, first day: generate a unique audit number the auditor
+    # can later use with 'Audit continuation' so day 2+ only need ID + signature.
+    # A day-2+ row already carries audit_number copied from the original visit,
+    # so this is a no-op for those.
+    if visitor.visit_purpose == 'audit' and not visitor.audit_number:
+        while True:
+            candidate = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+            if not Visitor.objects.filter(audit_number=candidate).exists():
+                visitor.audit_number = candidate
+                break
+
     # posprzątaj sesję i zapisz
     for key in ['badge_id', 'registration_mode', 'visitor_data', 'safety_answers']:
         request.session.pop(key, None)
@@ -746,6 +760,7 @@ def finish_registration(request, visitor_id):
         'is_production': visitor.production_area,
         'zpl_for_print': zpl_for_print,
         'visitor_id': visitor.pk,
+        'audit_number': visitor.audit_number,
         **_completion_screen_context(request, 'manual'),
     })
 
@@ -1244,11 +1259,13 @@ def exit_done_view(request, visitor_id=None):
 def confirm_guest_list_view(request):
     """Kiosk screen (public, same trust model as registration itself) where a
     visitor's host confirms they've received them. Lists approved visitors
-    still on-site who haven't been confirmed yet."""
+    still on-site who haven't been confirmed yet, alphabetically — the
+    template filters this list live by name as the host types, client-side,
+    so there's no page reload while the on-screen keyboard is open."""
     visitors = (Visitor.objects
                 .filter(approved=True, end_time__isnull=True, host_signature='')
                 .select_related('host', 'factory')
-                .order_by('-start_time'))
+                .order_by('first_name', 'last_name'))
     return render(request, 'kiosk/confirm_guest_list.html', {'visitors': visitors})
 
 
@@ -1619,6 +1636,103 @@ def complete_code_view(request, reservation_id=None):
         'is_production': visitor.production_area,
         **_completion_screen_context(request, 'code'),
     })
+
+
+def enter_audit_number_view(request):
+    """Entry point for the 'Audit continuation' method: looks up the first
+    (original) visit tied to an audit number so later days only need the
+    visitor's ID and signature — everything else is copied from it in
+    finalize_audit_continuation_view."""
+    guard = _require_method_active('audit_continuation', request)
+    if guard:
+        return guard
+    if request.method == 'POST':
+        code_input = (request.POST.get('audit_number') or '').strip().upper()
+        original = Visitor.objects.filter(audit_number=code_input).order_by('start_time').first()
+        if not original:
+            return render(request, 'kiosk/enter_audit_number.html', {
+                'error': _("Invalid audit number. Please try again.")
+            })
+        if original.audit_start_date and original.audit_end_date:
+            today = timezone.localdate()
+            if not (original.audit_start_date <= today <= original.audit_end_date):
+                return render(request, 'kiosk/enter_audit_number.html', {
+                    'error': _("This audit number is not valid today.")
+                })
+
+        request.session['audit_number'] = code_input
+        return redirect('enter_visitor_id_for_audit')
+
+    return render(request, 'kiosk/enter_audit_number.html')
+
+
+def enter_visitor_id_for_audit_view(request):
+    if 'audit_number' not in request.session:
+        return redirect('enter_audit_number')
+    if request.method == 'POST':
+        request.session['audit_visitor_id'] = request.POST.get('visitor_id')
+        return redirect('signature_for_audit')
+    return render(request, 'kiosk/enter_id_for_audit.html')
+
+
+def signature_for_audit_view(request):
+    if 'audit_number' not in request.session or 'audit_visitor_id' not in request.session:
+        return redirect('enter_audit_number')
+    if request.method == 'POST':
+        data_url = request.POST.get('signature_data')
+        format, imgstr = data_url.split(';base64,')
+        data = ContentFile(base64.b64decode(imgstr), name=f"AUDIT-{request.session['audit_number']}_signature.png")
+        path = default_storage.save(f'signatures/{data.name}', data)
+        request.session['audit_signature_path'] = path
+        return redirect('finalize_audit_continuation')
+    return render(request, 'kiosk/signature_audit.html')
+
+
+def finalize_audit_continuation_view(request):
+    """Creates a brand-new Visitor row for today, copying everything but the
+    ID/signature from the audit's original visit. Each day still goes through
+    its own approval and host-confirmation — this only skips re-asking the
+    unchanging registration data. Reuses finish_registration (in 'manual'
+    mode) for the badge/email/completion-screen logic instead of duplicating it."""
+    audit_number = request.session.get('audit_number')
+    visitor_id = request.session.get('audit_visitor_id')
+    signature_path = request.session.get('audit_signature_path')
+    if not audit_number or not visitor_id or not signature_path:
+        return redirect('enter_audit_number')
+
+    original = Visitor.objects.filter(audit_number=audit_number).order_by('start_time').first()
+    if not original:
+        return redirect('enter_audit_number')
+
+    lang = request.session.get(settings.LANGUAGE_COOKIE_NAME, original.language or 'pl')
+
+    visitor = Visitor.objects.create(
+        visitor_id=visitor_id,
+        first_name=original.first_name,
+        last_name=original.last_name,
+        phone=original.phone,
+        factory=original.factory,
+        company_name_text=original.company_name_text,
+        visit_purpose=original.visit_purpose,
+        host=original.host,
+        production_area=original.production_area,
+        with_supervision=original.with_supervision,
+        safety_acknowledged=True,
+        signed=signature_path,
+        language=lang,
+        audit_start_date=original.audit_start_date,
+        audit_end_date=original.audit_end_date,
+        audit_number=original.audit_number,
+        safety_question_1=original.safety_question_1,
+        safety_question_2=original.safety_question_2,
+        safety_question_3=original.safety_question_3,
+    )
+
+    for key in ['audit_number', 'audit_visitor_id', 'audit_signature_path']:
+        request.session.pop(key, None)
+    request.session['registration_mode'] = 'manual'
+
+    return redirect('finish_registration', visitor_id=visitor.visitor_id)
 
 
 @login_required

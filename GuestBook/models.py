@@ -50,6 +50,7 @@ class Visitor(models.Model):
     end_time = models.DateTimeField(null=True, blank=True)
     audit_start_date = models.DateField(null=True, blank=True)
     audit_end_date = models.DateField(null=True, blank=True)
+    audit_number = models.CharField(max_length=6, blank=True, null=True, db_index=True)
     badge_returned = models.BooleanField(default=False)
     language = models.CharField(max_length=2, choices=LANGUAGE_CHOICES, default='pl')
     safety_question_1 = models.CharField(max_length=500, blank=True, null=True)
@@ -290,6 +291,7 @@ class RegistrationMethod(models.Model):
         ('badge', 'Badge'),
         ('code', 'Registration code'),
         ('exit', 'Exit (badge scan)'),
+        ('audit_continuation', 'Audit continuation'),
     ]
     slug = models.CharField(max_length=20, choices=SLUG_CHOICES, unique=True)
     label = models.CharField(max_length=100)

@@ -6,10 +6,14 @@ from django.conf import settings
 def _resolve_staff_signature_path(visitor):
     """Signature stamped as 'Brüggen employee signature' on the BHP PDF.
     Prefers the host's own fresh signature from the kiosk's 'Confirm guest'
-    screen (captured at pickup, specific to this visit); falls back to the
-    badge-return admin's saved profile signature, then a default image."""
+    screen (captured at pickup, specific to this visit); then the saved
+    profile signature of whoever approved the registration (the person who
+    actually reviewed the safety answers); then the badge-return admin's
+    saved profile signature; then a default image."""
     if visitor.host_signature:
         return visitor.host_signature.path
+    if visitor.approved_by and hasattr(visitor.approved_by, "adminprofile") and visitor.approved_by.adminprofile.signature:
+        return visitor.approved_by.adminprofile.signature.path
     if visitor.returned_by and hasattr(visitor.returned_by, "adminprofile") and visitor.returned_by.adminprofile.signature:
         return visitor.returned_by.adminprofile.signature.path
     return os.path.join(settings.BASE_DIR, "GuestBook", "static", "images", "default_signature.png")
