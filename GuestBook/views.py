@@ -2955,6 +2955,7 @@ ALLOWED_GROUPS = (
     "Recevio_Reception",
     "Recevio_Helpdesk",
     "Recevio_BoxFlow",
+    "Recevio_Reservation",
 )
 
 def _require_helpdesk(user) -> bool:
@@ -3081,12 +3082,9 @@ def _can_helpdesk(user):
     return user.is_authenticated and user.groups.filter(name__in=["Recevio_Helpdesk", "SupportCenter"]).exists()
 
 def _can_issue_reservation_codes(user):
-    # Reception staff already carry Recevio_Reception (same group used for the
-    # old reservation/SMS admin views) — reuse it instead of a new group, so
-    # it's immediately manageable from the existing Users page (ALLOWED_GROUPS).
-    return user.is_authenticated and user.groups.filter(
-        name__in=["Recevio_Reception", "Recevio_Helpdesk", "SupportCenter"]
-    ).exists()
+    # Dedicated group, not implied by Reception/Helpdesk — Reservation access
+    # is granted explicitly per user via the Users page (ALLOWED_GROUPS).
+    return user.is_authenticated and user.groups.filter(name="Recevio_Reservation").exists()
 
 boxflow_required = user_passes_test(_can_boxflow)
 helpdesk_required = user_passes_test(_can_helpdesk)

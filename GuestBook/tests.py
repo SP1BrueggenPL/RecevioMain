@@ -309,11 +309,20 @@ class RegistrationMethodsPanelPermissionTests(KioskRoutingTestCase):
         response = self.client.get(reverse("reservation_code_create"))
         self.assertNotEqual(response.status_code, 200)
 
-    def test_reception_group_can_create_reservation_code(self):
-        """Reception runs this page day to day — reuses the existing
-        Recevio_Reception group (already manageable from the Users page),
-        independent of Recevio_Helpdesk."""
+    def test_reception_alone_cannot_create_reservation_code(self):
+        """Reservation access is its own dedicated group now — Reception
+        membership by itself is no longer enough (see Recevio_Reservation)."""
         group, _ = Group.objects.get_or_create(name="Recevio_Reception")
+        user = User.objects.create_user("receptionuser0", password="pw")
+        user.groups.add(group)
+        self.client.force_login(user)
+        response = self.client.get(reverse("reservation_code_create"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_reservation_group_can_create_reservation_code(self):
+        """The dedicated Recevio_Reservation group (manageable from the Users
+        page) is what actually grants access, independent of Reception/Helpdesk."""
+        group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
         user = User.objects.create_user("receptionuser", password="pw")
         user.groups.add(group)
         self.client.force_login(user)
@@ -666,6 +675,8 @@ class ReservationManagementTests(KioskRoutingTestCase):
     def setUp(self):
         super().setUp()
         self.reception = _make_reception_user()
+        reservation_group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
+        self.reception.groups.add(reservation_group)
         self.client.force_login(self.reception)
         self.reservation = Reservation.objects.create(
             user=self.reception,
@@ -702,9 +713,22 @@ class ReservationManagementTests(KioskRoutingTestCase):
         self.assertEqual(self.reservation.status, "cancelled")
         self.assertIsNotNone(self.reservation.cancelled_at)
 
-    def test_helpdesk_can_also_cancel(self):
+    def test_helpdesk_alone_cannot_cancel_someone_elses_reservation(self):
+        """Recevio_Helpdesk by itself no longer implies Reservation access —
+        it has to carry the dedicated Recevio_Reservation group too."""
         self.client.logout()
         self.client.force_login(_make_helpdesk_user())
+        resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
+        self.assertEqual(resp.status_code, 403)
+        self.reservation.refresh_from_db()
+        self.assertEqual(self.reservation.status, "sent")
+
+    def test_non_owner_with_reservation_group_can_cancel(self):
+        self.client.logout()
+        other = _make_helpdesk_user()
+        reservation_group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
+        other.groups.add(reservation_group)
+        self.client.force_login(other)
         resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
         self.assertEqual(resp.status_code, 302)
         self.reservation.refresh_from_db()
