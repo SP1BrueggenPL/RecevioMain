@@ -11,7 +11,7 @@ def generate_bhp_pdf(visitor):
     font_size = 10
 
     if lang == 'pl':
-        page.insert_text((100, 750), f"{visitor.end_time.strftime('%d.%m.%Y')}", fontsize=font_size)
+        page.insert_text((100, 750), f"{visitor.start_time.strftime('%d.%m.%Y')}", fontsize=font_size)
         page.insert_text((260, 750), f"{visitor.factory}", fontsize=font_size)
         page.insert_text((430, 750), f"{visitor.first_name} {visitor.last_name}", fontsize=font_size)
         page.insert_text((100, 395), f"{visitor.safety_question_1 or '-'}", fontsize=font_size)
@@ -30,7 +30,7 @@ def generate_bhp_pdf(visitor):
         page.insert_image(fitz.Rect(320, 755, 470, 805), filename=staff_signature)
 
     else:  # English
-        page.insert_text((100, 720), f"{visitor.end_time.strftime('%d.%m.%Y')}", fontsize=font_size)
+        page.insert_text((100, 720), f"{visitor.start_time.strftime('%d.%m.%Y')}", fontsize=font_size)
         page.insert_text((260, 720), f"{visitor.factory}", fontsize=font_size)
         page.insert_text((420, 720), f"{visitor.first_name} {visitor.last_name}", fontsize=font_size)
         page.insert_text((100, 354), f"{visitor.safety_question_1 or '-'}", fontsize=font_size)

@@ -26,6 +26,7 @@ from GuestBook.backends import ChipPinBackend
 from GuestBook.forms import VisitorForm
 from GuestBook.mail_service import send_pending_package_reminder
 from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
+from GuestBook.utils import generate_bhp_pdf
 
 
 class MatchMaskedNameLegalSuffixTests(TestCase):
@@ -1010,3 +1011,29 @@ class ProfilePersonalInfoTests(KioskRoutingTestCase):
         self.assertEqual(profile.first_name, "-")
         response = self.client.get(reverse("profile"))
         self.assertNotContains(response, "<strong>First Name:</strong> -")
+
+
+class GenerateBhpPdfTests(TestCase):
+    """Regression: the BHP PDF stamped visitor.end_time on the page, but
+    end_time is only set when a visitor checks out — generating this for
+    anyone still on-site crashed with AttributeError ('NoneType' has no
+    strftime). start_time (auto_now_add, always set) is the right field —
+    it's already what the view uses for the PDF's filename."""
+
+    def test_generates_for_a_visitor_still_on_site(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, language="pl",
+            end_time=None,
+        )
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
+
+    def test_generates_in_english(self):
+        visitor = Visitor.objects.create(
+            first_name="John", last_name="Smith", visit_purpose="",
+            visitor_id="002", production_area=False, language="en",
+            end_time=None,
+        )
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
