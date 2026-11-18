@@ -1,0 +1,60 @@
+{% extends "base_kioskb.html" %}
+{% load i18n static %}
+
+{% block content %}
+<div style="width: 700px; max-width: 95vw; margin: auto; padding: 3rem; text-align: center; background-color: rgba(255, 255, 255, 0.9); border-radius: 15px;">
+  <h1 style="font-size: 2.3rem; margin-bottom: 1.5rem;">{% trans "Confirm guest" %}</h1>
+  <p style="font-size: 1.2rem; color: #514b51; margin-bottom: 2rem;">
+    {% trans "Select your guest below and sign to confirm you've received them." %}
+  </p>
+
+  {% if visitors %}
+    <div style="text-align: left;">
+      {% for v in visitors %}
+        <a href="{% url 'confirm_guest_signature' v.pk %}"
+           style="
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             padding: 1.2rem 1.5rem;
+             margin-bottom: 1rem;
+             background-color: #fff;
+             border: 1px solid #ddd;
+             border-radius: 12px;
+             text-decoration: none;
+             color: #000;
+             box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+           ">
+          <span>
+            <strong style="font-size: 1.3rem;">{{ v.first_name }} {{ v.last_name }}</strong><br>
+            <span style="color: #777;">
+              {% if v.factory %}{{ v.factory.company_name }}{% elif v.company_name_text %}{{ v.company_name_text }}{% endif %}
+              {% if v.host %} &middot; {% trans "Host" %}: {{ v.host.host_name }}{% endif %}
+            </span>
+          </span>
+          <span style="font-size: 1.5rem; color: #cc6884;">&#8594;</span>
+        </a>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p style="color: #777; font-size: 1.2rem;">{% trans "No guests waiting for confirmation." %}</p>
+  {% endif %}
+
+  <a href="{% url 'start' %}"
+     style="
+       display: inline-block;
+       margin-top: 1.5rem;
+       width: 300px;
+       height: 90px;
+       line-height: 90px;
+       font-size: 1.8rem;
+       background-color: #514b51;
+       color: white;
+       text-decoration: none;
+       border-radius: 12px;
+       box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+     ">
+    {% trans "Back" %}
+  </a>
+</div>
+{% endblock %}

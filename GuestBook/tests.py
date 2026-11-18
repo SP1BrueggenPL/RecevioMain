@@ -26,7 +26,7 @@ from GuestBook.backends import ChipPinBackend
 from GuestBook.forms import VisitorForm
 from GuestBook.mail_service import send_pending_package_reminder
 from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
-from GuestBook.utils import generate_bhp_pdf
+from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_path
 
 
 class MatchMaskedNameLegalSuffixTests(TestCase):
@@ -1037,3 +1037,133 @@ class GenerateBhpPdfTests(TestCase):
         )
         pdf_stream = generate_bhp_pdf(visitor)
         self.assertGreater(len(pdf_stream.getvalue()), 0)
+
+
+class StaffSignatureResolutionTests(TestCase):
+    """_resolve_staff_signature_path prefers the fresh host signature from
+    the kiosk's Confirm guest screen over the old returned_by admin-profile
+    signature, which in turn beats the generic default image."""
+
+    def test_falls_back_to_default_image_when_nothing_set(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertTrue(path.endswith("default_signature.png"))
+
+    def test_prefers_host_signature_over_returned_by(self):
+        admin = User.objects.create_user("admin1", password="pw")
+        profile = AdminProfile.objects.create(user=admin)
+        profile.signature = "admin_signatures/fake.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            returned_by=admin, host_signature="host_signatures/fake.png",
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("host_signatures", path)
+
+
+class ConfirmGuestListTests(KioskRoutingTestCase):
+    def test_lists_approved_present_unsigned_visitor(self):
+        visitor = Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Anna")
+
+    def test_excludes_unapproved_visitor(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=False,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+    def test_excludes_already_signed_visitor(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+            host_signature="host_signatures/fake.png",
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+    def test_excludes_visitor_who_already_left(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+            end_time=timezone.now(),
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+
+class ConfirmGuestSignatureTests(KioskRoutingTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp(prefix="recevio-test-media-")
+        cls._media_root_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_root_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_root_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.visitor = Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+
+    def test_post_saves_host_signature(self):
+        resp = self.client.post(
+            reverse("confirm_guest_signature", args=[self.visitor.pk]),
+            {"signature_data": "data:image/png;base64,eA=="},
+        )
+        self.assertRedirects(resp, reverse("confirm_guest_list"))
+        self.visitor.refresh_from_db()
+        self.assertTrue(self.visitor.host_signature)
+        self.assertIsNotNone(self.visitor.host_signed_at)
+
+    def test_signed_visitor_disappears_from_the_list(self):
+        self.client.post(
+            reverse("confirm_guest_signature", args=[self.visitor.pk]),
+            {"signature_data": "data:image/png;base64,eA=="},
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+
+class PendingApprovalsMarksSeenTests(KioskRoutingTestCase):
+    def test_visiting_pending_approvals_updates_notifications_seen_at(self):
+        staff = _make_helpdesk_user()
+        profile, _ = AdminProfile.objects.get_or_create(user=staff)
+        self.assertIsNone(profile.notifications_seen_at)
+        self.client.force_login(staff)
+
+        self.client.get(reverse("pending_approvals"))
+
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.notifications_seen_at)
+
+    def test_count_drops_to_zero_after_visiting_pending_approvals(self):
+        staff = _make_helpdesk_user()
+        self.client.force_login(staff)
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=False,
+        )
+        self.assertEqual(self.client.get(reverse("notifications_status")).json()["count"], 1)
+
+        self.client.get(reverse("pending_approvals"))
+
+        self.assertEqual(self.client.get(reverse("notifications_status")).json()["count"], 0)

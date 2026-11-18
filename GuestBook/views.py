@@ -1241,6 +1241,34 @@ def exit_done_view(request, visitor_id=None):
     return render(request, 'kiosk/exit_done.html')
 
 
+def confirm_guest_list_view(request):
+    """Kiosk screen (public, same trust model as registration itself) where a
+    visitor's host confirms they've received them. Lists approved visitors
+    still on-site who haven't been confirmed yet."""
+    visitors = (Visitor.objects
+                .filter(approved=True, end_time__isnull=True, host_signature='')
+                .select_related('host', 'factory')
+                .order_by('-start_time'))
+    return render(request, 'kiosk/confirm_guest_list.html', {'visitors': visitors})
+
+
+def confirm_guest_signature_view(request, pk):
+    visitor = get_object_or_404(Visitor, pk=pk)
+
+    if request.method == 'POST':
+        data_url = request.POST.get('signature_data')
+        if data_url:
+            format, imgstr = data_url.split(';base64,')
+            data = ContentFile(base64.b64decode(imgstr), name=f"{visitor.visitor_id}_host_signature.png")
+            path = default_storage.save(f'host_signatures/{data.name}', data)
+            visitor.host_signature = path
+            visitor.host_signed_at = timezone.now()
+            visitor.save(update_fields=['host_signature', 'host_signed_at'])
+        return redirect('confirm_guest_list')
+
+    return render(request, 'kiosk/confirm_guest_signature.html', {'visitor': visitor})
+
+
 # dla kodu
 
 def enter_code_view(request):
@@ -2357,6 +2385,13 @@ def reprint_badge_view(request, pk):
 @login_required
 def pending_approvals(request):
     unapproved = Visitor.objects.filter(approved=False).order_by('-start_time')
+
+    # Mark the bell as seen now that staff have actually opened this page —
+    # not just previewed the count in the dropdown (see notifications_status).
+    profile, _ = AdminProfile.objects.get_or_create(user=request.user)
+    profile.notifications_seen_at = timezone.now()
+    profile.save(update_fields=['notifications_seen_at'])
+
     return render(request, 'panel/pending_approvals.html', {'unapproved_visitors': unapproved})
 
 

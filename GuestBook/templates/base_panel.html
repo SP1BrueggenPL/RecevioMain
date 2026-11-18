@@ -193,7 +193,6 @@
   (function () {
     const badge = document.getElementById('notifications-badge');
     const text = document.getElementById('notifications-text');
-    const bellDropdown = document.getElementById('notificationsDropdown');
 
     function refresh() {
       fetch("{% url 'notifications_status' %}")
@@ -211,13 +210,6 @@
         })
         .catch(() => {});
     }
-
-    bellDropdown.addEventListener('shown.bs.dropdown', function () {
-      fetch("{% url 'notifications_mark_seen' %}", {
-        method: 'POST',
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
-      }).then(refresh).catch(() => {});
-    });
 
     refresh();
     setInterval(refresh, 20000);
