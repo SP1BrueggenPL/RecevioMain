@@ -40,6 +40,13 @@
 {% endif %}
 
 
+  {% if audit_number %}
+  <p style="font-size: 1.8rem; margin-bottom: 2rem;">
+    {% trans "Your audit number:" %} <strong>{{ audit_number }}</strong><br>
+    <span style="font-size: 1.3rem;">{% trans "Use this number with 'Audit continuation' on later days of this audit." %}</span>
+  </p>
+  {% endif %}
+
   <p style="margin-top: 2rem; font-style: italic; font-size: 1.8rem; color: #514b51;">
     {{ footer_note }}
   </p>

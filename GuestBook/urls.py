@@ -43,6 +43,11 @@ urlpatterns = [
     path('finalize_code/', views.finalize_from_code_view, name='finalize_from_code'),
     path("complete_code/<int:reservation_id>/", views.complete_code_view, name="complete_code"),
 
+    path('enter_audit_number/', views.enter_audit_number_view, name='enter_audit_number'),
+    path('enter_visitor_id_for_audit/', views.enter_visitor_id_for_audit_view, name='enter_visitor_id_for_audit'),
+    path('signature_audit/', views.signature_for_audit_view, name='signature_for_audit'),
+    path('finalize_audit/', views.finalize_audit_continuation_view, name='finalize_audit_continuation'),
+
     path('kiosk/exit/', views.exit_badge_view, name='exit_badge'),
     path("kiosk/exit/done/<str:visitor_id>/", views.exit_done_view, name="exit_done"),
     path('kiosk/settings/', views.kiosk_settings_save, name='kiosk_settings_save'),
