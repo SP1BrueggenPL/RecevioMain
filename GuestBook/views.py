@@ -2556,6 +2556,18 @@ def host_delete(request, pk):
     return redirect("hosts")
 
 
+def _normalize_host_phone(raw: str) -> str:
+    """Host.phone is max_length=9 (plain Polish national number, no country
+    code). Excel often stores phone numbers as a number with the '48' country
+    code prefix (e.g. 48668376832, read back as an 11-digit string) — strip
+    that, and defensively keep just the last 9 digits of whatever's left so a
+    long/malformed value truncates instead of crashing the whole import."""
+    digits = re.sub(r'\D', '', raw)
+    if len(digits) == 11 and digits.startswith('48'):
+        digits = digits[2:]
+    return digits[-9:] if len(digits) > 9 else digits
+
+
 @login_required
 def host_import(request):
     if request.method == "POST" and request.FILES.get("file"):
@@ -2565,7 +2577,7 @@ def host_import(request):
 
         for row in sheet.iter_rows(min_row=2, values_only=True):
             host_name = str(row[0]).strip() if row[0] else None
-            phone = str(row[1]).strip() if len(row) > 1 and row[1] else ""
+            phone = _normalize_host_phone(str(row[1]).strip()) if len(row) > 1 and row[1] else ""
             email = str(row[2]).strip() if len(row) > 2 and row[2] else ""
 
             if host_name:

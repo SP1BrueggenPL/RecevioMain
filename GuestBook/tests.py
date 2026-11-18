@@ -1,9 +1,12 @@
 import shutil
 import tempfile
 from datetime import timedelta
+from io import BytesIO
 
+import openpyxl
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -13,6 +16,7 @@ from django.utils.translation import activate
 from GuestBook.models import (
     AdminProfile,
     CompletionScreenContent,
+    Host,
     Package,
     Recipient,
     RegistrationMethod,
@@ -25,7 +29,12 @@ from GuestBook.models import (
 from GuestBook.backends import ChipPinBackend
 from GuestBook.forms import VisitorForm
 from GuestBook.mail_service import send_pending_package_reminder
-from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
+from GuestBook.views import (
+    _build_package_registered_email,
+    _match_masked_name,
+    _mark_package_issued,
+    _normalize_host_phone,
+)
 from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_path
 
 
@@ -1167,3 +1176,49 @@ class PendingApprovalsMarksSeenTests(KioskRoutingTestCase):
         self.client.get(reverse("pending_approvals"))
 
         self.assertEqual(self.client.get(reverse("notifications_status")).json()["count"], 0)
+
+
+class NormalizeHostPhoneTests(TestCase):
+    """Host.phone is max_length=9 — Excel stores phone numbers as a number
+    with the '48' country-code prefix, e.g. 48668376832 (read back as an
+    11-digit string), which overflowed the column and crashed host_import."""
+
+    def test_strips_48_country_code_prefix(self):
+        self.assertEqual(_normalize_host_phone("48668376832"), "668376832")
+
+    def test_strips_plus_48_and_separators(self):
+        self.assertEqual(_normalize_host_phone("+48 668-376-832"), "668376832")
+
+    def test_leaves_plain_9_digit_number_untouched(self):
+        self.assertEqual(_normalize_host_phone("668376832"), "668376832")
+
+    def test_truncates_to_last_9_digits_if_still_too_long(self):
+        self.assertEqual(len(_normalize_host_phone("1234567890123")), 9)
+
+
+class HostImportTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def _upload_xlsx(self, rows):
+        wb = openpyxl.Workbook()
+        sheet = wb.active
+        sheet.append(["ImieNazwisko", "Telefon", "Email"])
+        for row in rows:
+            sheet.append(row)
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return SimpleUploadedFile(
+            "hosts.xlsx", stream.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def test_import_normalizes_phone_with_country_code(self):
+        upload = self._upload_xlsx([["Jan Kowalski", 48668376832, "jan.kowalski@brueggen.com"]])
+        resp = self.client.post(reverse("host_import"), {"file": upload})
+        self.assertEqual(resp.status_code, 302)
+        host = Host.objects.get(host_name="Jan Kowalski")
+        self.assertEqual(host.phone, "668376832")
+        self.assertEqual(host.email, "jan.kowalski@brueggen.com")
