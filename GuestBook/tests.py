@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from datetime import timedelta
 from io import BytesIO
+from unittest import mock
 
 import openpyxl
 from django.conf import settings
@@ -134,31 +135,58 @@ class PackageRegisteredEmailTests(TestCase):
 
 
 class PendingPackageReminderEmailTests(TestCase):
+    """Mail is sent exclusively via Azure Communication Services (no SMTP
+    fallback — see mail_service.send_via_acs), so these mock the ACS send
+    rather than relying on Django's test email backend."""
+
+    def _mock_acs_available(self):
+        return mock.patch.multiple(
+            "GuestBook.mail_service._mail_service",
+            conn_str="endpoint=https://example;accesskey=fake",
+            sender="recepcja@example.com",
+        )
+
     def test_reminder_includes_location_phrase(self):
+        with self._mock_acs_available(), \
+             mock.patch("GuestBook.mail_service.MailService.send") as mock_send:
+            mock_send.return_value = {"status": "sent", "message_id": "abc"}
+            status = send_pending_package_reminder("r@example.com", [{
+                "code": "BXC2URAHUB",
+                "sender": "Allegro",
+                "delivered_at": timezone.now(),
+                "comment": "",
+                "location_phrase": "recepcji budynku socjalnego Brüggen",
+            }])
+        self.assertEqual(status, "sent")
+        mock_send.assert_called_once()
+        body = mock_send.call_args.args[2]
+        self.assertIn("paczkomat: recepcji budynku socjalnego Brüggen", body)
+
+    def test_reminder_falls_back_to_main_office_phrase_when_missing(self):
+        with self._mock_acs_available(), \
+             mock.patch("GuestBook.mail_service.MailService.send") as mock_send:
+            mock_send.return_value = {"status": "sent", "message_id": "abc"}
+            status = send_pending_package_reminder("r@example.com", [{
+                "code": "BXNOPHRASE",
+                "sender": "Allegro",
+                "delivered_at": timezone.now(),
+                "comment": "",
+            }])
+        self.assertEqual(status, "sent")
+        body = mock_send.call_args.args[2]
+        self.assertIn("paczkomat: recepcji biura głównego Brüggen", body)
+
+    def test_returns_error_when_acs_not_configured(self):
+        """No SMTP fallback remains: an unconfigured ACS means the send fails
+        outright instead of silently going out through the retired recevio
+        SMTP mailbox."""
         status = send_pending_package_reminder("r@example.com", [{
             "code": "BXC2URAHUB",
             "sender": "Allegro",
             "delivered_at": timezone.now(),
             "comment": "",
-            "location_phrase": "recepcji budynku socjalnego Brüggen",
         }])
-        self.assertEqual(status, "sent")
-        from django.core import mail
-        self.assertEqual(len(mail.outbox), 1)
-        sent = mail.outbox[0]
-        self.assertTrue(sent.subject.startswith("Recepcja Brüggen -"))
-        self.assertIn("paczkomat: recepcji budynku socjalnego Brüggen", sent.body)
-
-    def test_reminder_falls_back_to_main_office_phrase_when_missing(self):
-        status = send_pending_package_reminder("r@example.com", [{
-            "code": "BXNOPHRASE",
-            "sender": "Allegro",
-            "delivered_at": timezone.now(),
-            "comment": "",
-        }])
-        self.assertEqual(status, "sent")
-        from django.core import mail
-        self.assertIn("paczkomat: recepcji biura głównego Brüggen", mail.outbox[-1].body)
+        self.assertEqual(status, "error")
 
 
 class RemindUnpickedPackagesCommandTests(TestCase):
