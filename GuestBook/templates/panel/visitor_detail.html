@@ -35,7 +35,10 @@
               {% endif %}
             </li>
 
-            <li class="list-group-item"><strong>Purpose of Visit:</strong> {{ guest.visit_purpose }}</li>
+            <li class="list-group-item"><strong>Purpose of Visit:</strong> {{ visit_purpose_label }}</li>
+              {% if guest.audit_number %}
+  <li class="list-group-item"><strong>Audit Number:</strong> {{ guest.audit_number }}</li>
+{% endif %}
               {% if guest.audit_start_date or guest.audit_end_date %}
   <li class="list-group-item">
     <strong>Audit Start Date:</strong>

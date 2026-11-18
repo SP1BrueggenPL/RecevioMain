@@ -1333,6 +1333,34 @@ class VisitorDetailDisplayTests(KioskRoutingTestCase):
         response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
         self.assertContains(response, "No saved signature on this admin's profile yet.")
 
+    def test_shows_translated_purpose_label_not_raw_stored_value(self):
+        """KioskRoutingTestCase activates 'pl', so the lazily-translated label
+        should render as the Polish 'Audyt', not the raw stored 'audit' key."""
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Audyt")
+        self.assertNotContains(response, ">audit<")
+
+    def test_shows_audit_number_when_present(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False, audit_number="ABC123",
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Audit Number")
+        self.assertContains(response, "ABC123")
+
+    def test_does_not_show_audit_number_row_when_absent(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertNotContains(response, "Audit Number")
+
 
 class NearbyPersonsDisplayTests(KioskRoutingTestCase):
     def test_renders_without_send_print_columns(self):
@@ -1408,9 +1436,11 @@ class EnterAuditNumberTests(KioskRoutingTestCase):
         )
 
     def test_unknown_number_shows_error(self):
+        """KioskRoutingTestCase activates 'pl', so the now-translated error
+        message renders in Polish, not the raw English msgid."""
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ZZZZZZ'})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid audit number")
+        self.assertContains(response, "Nieprawidłowy numer audytu")
 
     def test_valid_number_redirects_to_id_entry(self):
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'abc123'})
@@ -1422,7 +1452,7 @@ class EnterAuditNumberTests(KioskRoutingTestCase):
         self.original.audit_end_date = timezone.localdate() - timedelta(days=9)
         self.original.save()
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ABC123'})
-        self.assertContains(response, "not valid today")
+        self.assertContains(response, "nie jest dziś ważny")
 
     def test_accepts_date_inside_audit_range(self):
         today = timezone.localdate()

@@ -2143,7 +2143,11 @@ def visitor_detail(request, pk):
             guest.save()
             messages.info(request, "End Time cleared.")
 
-    return render(request, "panel/visitor_detail.html", {"guest": guest})
+    visit_purpose_label = dict(VISIT_PURPOSE_CHOICES).get(guest.visit_purpose, guest.visit_purpose)
+    return render(request, "panel/visitor_detail.html", {
+        "guest": guest,
+        "visit_purpose_label": visit_purpose_label,
+    })
 
 
 @login_required
