@@ -41,10 +41,18 @@
 
 
   {% if audit_number %}
-  <p style="font-size: 1.8rem; margin-bottom: 2rem;">
-    {% trans "Your audit number:" %} <strong>{{ audit_number }}</strong><br>
-    <span style="font-size: 1.3rem;">{% trans "Use this number with 'Audit continuation' on later days of this audit." %}</span>
-  </p>
+  <div style="
+      background-color: #fdf0f3;
+      border: 2px solid #cc6884;
+      border-radius: 12px;
+      padding: 1.5rem 2rem;
+      margin: 0 auto 2rem;
+      max-width: 600px;
+  ">
+    <p style="font-size: 1.6rem; margin-bottom: 0.5rem;">{% trans "Your audit number" %}:</p>
+    <p style="font-size: 3rem; letter-spacing: 0.2rem; font-weight: bold; color: #cc6884; margin-bottom: 0.5rem;">{{ audit_number }}</p>
+    <p style="font-size: 1.2rem; margin: 0;">{% trans "Use it with Audit continuation on later days." %}</p>
+  </div>
   {% endif %}
 
   <p style="margin-top: 2rem; font-style: italic; font-size: 1.8rem; color: #514b51;">

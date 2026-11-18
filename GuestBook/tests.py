@@ -2,6 +2,7 @@ import shutil
 import tempfile
 from datetime import timedelta
 from io import BytesIO
+from unittest import mock
 
 import openpyxl
 from django.conf import settings
@@ -134,31 +135,58 @@ class PackageRegisteredEmailTests(TestCase):
 
 
 class PendingPackageReminderEmailTests(TestCase):
+    """Mail is sent exclusively via Azure Communication Services (no SMTP
+    fallback — see mail_service.send_via_acs), so these mock the ACS send
+    rather than relying on Django's test email backend."""
+
+    def _mock_acs_available(self):
+        return mock.patch.multiple(
+            "GuestBook.mail_service._mail_service",
+            conn_str="endpoint=https://example;accesskey=fake",
+            sender="recepcja@example.com",
+        )
+
     def test_reminder_includes_location_phrase(self):
+        with self._mock_acs_available(), \
+             mock.patch("GuestBook.mail_service.MailService.send") as mock_send:
+            mock_send.return_value = {"status": "sent", "message_id": "abc"}
+            status = send_pending_package_reminder("r@example.com", [{
+                "code": "BXC2URAHUB",
+                "sender": "Allegro",
+                "delivered_at": timezone.now(),
+                "comment": "",
+                "location_phrase": "recepcji budynku socjalnego Brüggen",
+            }])
+        self.assertEqual(status, "sent")
+        mock_send.assert_called_once()
+        body = mock_send.call_args.args[2]
+        self.assertIn("paczkomat: recepcji budynku socjalnego Brüggen", body)
+
+    def test_reminder_falls_back_to_main_office_phrase_when_missing(self):
+        with self._mock_acs_available(), \
+             mock.patch("GuestBook.mail_service.MailService.send") as mock_send:
+            mock_send.return_value = {"status": "sent", "message_id": "abc"}
+            status = send_pending_package_reminder("r@example.com", [{
+                "code": "BXNOPHRASE",
+                "sender": "Allegro",
+                "delivered_at": timezone.now(),
+                "comment": "",
+            }])
+        self.assertEqual(status, "sent")
+        body = mock_send.call_args.args[2]
+        self.assertIn("paczkomat: recepcji biura głównego Brüggen", body)
+
+    def test_returns_error_when_acs_not_configured(self):
+        """No SMTP fallback remains: an unconfigured ACS means the send fails
+        outright instead of silently going out through the retired recevio
+        SMTP mailbox."""
         status = send_pending_package_reminder("r@example.com", [{
             "code": "BXC2URAHUB",
             "sender": "Allegro",
             "delivered_at": timezone.now(),
             "comment": "",
-            "location_phrase": "recepcji budynku socjalnego Brüggen",
         }])
-        self.assertEqual(status, "sent")
-        from django.core import mail
-        self.assertEqual(len(mail.outbox), 1)
-        sent = mail.outbox[0]
-        self.assertTrue(sent.subject.startswith("Recepcja Brüggen -"))
-        self.assertIn("paczkomat: recepcji budynku socjalnego Brüggen", sent.body)
-
-    def test_reminder_falls_back_to_main_office_phrase_when_missing(self):
-        status = send_pending_package_reminder("r@example.com", [{
-            "code": "BXNOPHRASE",
-            "sender": "Allegro",
-            "delivered_at": timezone.now(),
-            "comment": "",
-        }])
-        self.assertEqual(status, "sent")
-        from django.core import mail
-        self.assertIn("paczkomat: recepcji biura głównego Brüggen", mail.outbox[-1].body)
+        self.assertEqual(status, "error")
 
 
 class RemindUnpickedPackagesCommandTests(TestCase):
@@ -1333,6 +1361,34 @@ class VisitorDetailDisplayTests(KioskRoutingTestCase):
         response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
         self.assertContains(response, "No saved signature on this admin's profile yet.")
 
+    def test_shows_translated_purpose_label_not_raw_stored_value(self):
+        """KioskRoutingTestCase activates 'pl', so the lazily-translated label
+        should render as the Polish 'Audyt', not the raw stored 'audit' key."""
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Audyt")
+        self.assertNotContains(response, ">audit<")
+
+    def test_shows_audit_number_when_present(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False, audit_number="ABC123",
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertContains(response, "Audit Number")
+        self.assertContains(response, "ABC123")
+
+    def test_does_not_show_audit_number_row_when_absent(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("visitor_detail", args=[visitor.pk]))
+        self.assertNotContains(response, "Audit Number")
+
 
 class NearbyPersonsDisplayTests(KioskRoutingTestCase):
     def test_renders_without_send_print_columns(self):
@@ -1408,9 +1464,11 @@ class EnterAuditNumberTests(KioskRoutingTestCase):
         )
 
     def test_unknown_number_shows_error(self):
+        """KioskRoutingTestCase activates 'pl', so the now-translated error
+        message renders in Polish, not the raw English msgid."""
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ZZZZZZ'})
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Invalid audit number")
+        self.assertContains(response, "Nieprawidłowy numer audytu")
 
     def test_valid_number_redirects_to_id_entry(self):
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'abc123'})
@@ -1422,7 +1480,7 @@ class EnterAuditNumberTests(KioskRoutingTestCase):
         self.original.audit_end_date = timezone.localdate() - timedelta(days=9)
         self.original.save()
         response = self.client.post(reverse('enter_audit_number'), {'audit_number': 'ABC123'})
-        self.assertContains(response, "not valid today")
+        self.assertContains(response, "nie jest dziś ważny")
 
     def test_accepts_date_inside_audit_range(self):
         today = timezone.localdate()

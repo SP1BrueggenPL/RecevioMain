@@ -69,28 +69,19 @@ def send_via_acs(
     """
     Convenience wrapper matching the old send_email_with_timeout signature.
     Returns 'sent' | 'skipped' | 'error'.
-    Falls back to Django SMTP if ACS is not configured.
     """
     if not email:
         return "skipped"
 
-    # Prefer ACS if configured
-    if _mail_service._available():
-        try:
-            _mail_service.send([email], subject, body, html=html, app_user=app_user)
-            return "sent"
-        except Exception as e:
-            logger.exception("[ACS EMAIL ERROR] %s", e)
-            return "error"
+    if not _mail_service._available():
+        logger.error("[ACS EMAIL ERROR] ACS_CONNECTION_STRING/ACS_SENDER_ADDRESS not configured")
+        return "error"
 
-    # Fallback: Django SMTP backend
     try:
-        from django.core.mail import send_mail as _send_mail
-        from django.conf import settings as _s
-        _send_mail(subject, body, _s.DEFAULT_FROM_EMAIL, [email], fail_silently=False)
+        _mail_service.send([email], subject, body, html=html, app_user=app_user)
         return "sent"
     except Exception as e:
-        logger.exception("[SMTP EMAIL ERROR] %s", e)
+        logger.exception("[ACS EMAIL ERROR] %s", e)
         return "error"
 
 

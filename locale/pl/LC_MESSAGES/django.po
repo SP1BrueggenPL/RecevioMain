@@ -227,3 +227,21 @@ msgstr "Twoja wizyta dobiegła końca. Dziękujemy!"
 
 msgid "Badge"
 msgstr "Pestka"
+
+msgid "Please enter your audit number"
+msgstr "Proszę wprowadzić numer audytu"
+
+msgid "Enter the audit number here"
+msgstr "Proszę wpisać numer audytu w tym miejscu"
+
+msgid "Invalid audit number. Please try again."
+msgstr "Nieprawidłowy numer audytu. Proszę spróbować ponownie."
+
+msgid "This audit number is not valid today."
+msgstr "Ten numer audytu nie jest dziś ważny."
+
+msgid "Your audit number"
+msgstr "Twój numer audytu"
+
+msgid "Use it with Audit continuation on later days."
+msgstr "Użyj go z metodą \"Kontynuacja audytu\" w kolejnych dniach."
