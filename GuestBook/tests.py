@@ -1,9 +1,12 @@
 import shutil
 import tempfile
 from datetime import timedelta
+from io import BytesIO
 
+import openpyxl
 from django.conf import settings
 from django.contrib.auth.models import Group, User
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -13,6 +16,7 @@ from django.utils.translation import activate
 from GuestBook.models import (
     AdminProfile,
     CompletionScreenContent,
+    Host,
     Package,
     Recipient,
     RegistrationMethod,
@@ -25,7 +29,13 @@ from GuestBook.models import (
 from GuestBook.backends import ChipPinBackend
 from GuestBook.forms import VisitorForm
 from GuestBook.mail_service import send_pending_package_reminder
-from GuestBook.views import _build_package_registered_email, _match_masked_name, _mark_package_issued
+from GuestBook.views import (
+    _build_package_registered_email,
+    _match_masked_name,
+    _mark_package_issued,
+    _normalize_host_phone,
+)
+from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_path
 
 
 class MatchMaskedNameLegalSuffixTests(TestCase):
@@ -309,11 +319,20 @@ class RegistrationMethodsPanelPermissionTests(KioskRoutingTestCase):
         response = self.client.get(reverse("reservation_code_create"))
         self.assertNotEqual(response.status_code, 200)
 
-    def test_reception_group_can_create_reservation_code(self):
-        """Reception runs this page day to day — reuses the existing
-        Recevio_Reception group (already manageable from the Users page),
-        independent of Recevio_Helpdesk."""
+    def test_reception_alone_cannot_create_reservation_code(self):
+        """Reservation access is its own dedicated group now — Reception
+        membership by itself is no longer enough (see Recevio_Reservation)."""
         group, _ = Group.objects.get_or_create(name="Recevio_Reception")
+        user = User.objects.create_user("receptionuser0", password="pw")
+        user.groups.add(group)
+        self.client.force_login(user)
+        response = self.client.get(reverse("reservation_code_create"))
+        self.assertNotEqual(response.status_code, 200)
+
+    def test_reservation_group_can_create_reservation_code(self):
+        """The dedicated Recevio_Reservation group (manageable from the Users
+        page) is what actually grants access, independent of Reception/Helpdesk."""
+        group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
         user = User.objects.create_user("receptionuser", password="pw")
         user.groups.add(group)
         self.client.force_login(user)
@@ -666,6 +685,8 @@ class ReservationManagementTests(KioskRoutingTestCase):
     def setUp(self):
         super().setUp()
         self.reception = _make_reception_user()
+        reservation_group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
+        self.reception.groups.add(reservation_group)
         self.client.force_login(self.reception)
         self.reservation = Reservation.objects.create(
             user=self.reception,
@@ -702,9 +723,22 @@ class ReservationManagementTests(KioskRoutingTestCase):
         self.assertEqual(self.reservation.status, "cancelled")
         self.assertIsNotNone(self.reservation.cancelled_at)
 
-    def test_helpdesk_can_also_cancel(self):
+    def test_helpdesk_alone_cannot_cancel_someone_elses_reservation(self):
+        """Recevio_Helpdesk by itself no longer implies Reservation access —
+        it has to carry the dedicated Recevio_Reservation group too."""
         self.client.logout()
         self.client.force_login(_make_helpdesk_user())
+        resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
+        self.assertEqual(resp.status_code, 403)
+        self.reservation.refresh_from_db()
+        self.assertEqual(self.reservation.status, "sent")
+
+    def test_non_owner_with_reservation_group_can_cancel(self):
+        self.client.logout()
+        other = _make_helpdesk_user()
+        reservation_group, _ = Group.objects.get_or_create(name="Recevio_Reservation")
+        other.groups.add(reservation_group)
+        self.client.force_login(other)
         resp = self.client.post(reverse("reservation_cancel", args=[self.reservation.pk]))
         self.assertEqual(resp.status_code, 302)
         self.reservation.refresh_from_db()
@@ -957,3 +991,234 @@ class VisitorDeleteTests(KioskRoutingTestCase):
         resp = self.client.get(reverse("dashboard"))
         self.assertEqual(resp.status_code, 200)
         self.assertNotContains(resp, reverse("visitor_delete", args=[self.visitor.pk]))
+
+
+class ProfilePersonalInfoTests(KioskRoutingTestCase):
+    """Regression: the profile page showed AdminProfile.first_name/last_name/
+    email, duplicate fields that default to '-'/'' and are only ever filled
+    by the LDAP backend — which is disabled (on-prem AD unreachable from
+    Azure). The real, populated values live on auth.User."""
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user(
+            "janek", password="pw",
+            first_name="Jan", last_name="Kowalski", email="jan.kowalski@brueggen.com",
+        )
+        self.client.force_login(self.user)
+
+    def test_profile_shows_the_real_user_fields(self):
+        response = self.client.get(reverse("profile"))
+        self.assertContains(response, "Jan")
+        self.assertContains(response, "Kowalski")
+        self.assertContains(response, "jan.kowalski@brueggen.com")
+
+    def test_profile_does_not_blank_out_when_adminprofile_defaults_are_unset(self):
+        # AdminProfile.first_name/last_name/email default to "-" — confirm the
+        # page no longer renders those placeholders instead of the real name.
+        profile, _ = AdminProfile.objects.get_or_create(user=self.user)
+        self.assertEqual(profile.first_name, "-")
+        response = self.client.get(reverse("profile"))
+        self.assertNotContains(response, "<strong>First Name:</strong> -")
+
+
+class GenerateBhpPdfTests(TestCase):
+    """Regression: the BHP PDF stamped visitor.end_time on the page, but
+    end_time is only set when a visitor checks out — generating this for
+    anyone still on-site crashed with AttributeError ('NoneType' has no
+    strftime). start_time (auto_now_add, always set) is the right field —
+    it's already what the view uses for the PDF's filename."""
+
+    def test_generates_for_a_visitor_still_on_site(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, language="pl",
+            end_time=None,
+        )
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
+
+    def test_generates_in_english(self):
+        visitor = Visitor.objects.create(
+            first_name="John", last_name="Smith", visit_purpose="",
+            visitor_id="002", production_area=False, language="en",
+            end_time=None,
+        )
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
+
+
+class StaffSignatureResolutionTests(TestCase):
+    """_resolve_staff_signature_path prefers the fresh host signature from
+    the kiosk's Confirm guest screen over the old returned_by admin-profile
+    signature, which in turn beats the generic default image."""
+
+    def test_falls_back_to_default_image_when_nothing_set(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertTrue(path.endswith("default_signature.png"))
+
+    def test_prefers_host_signature_over_returned_by(self):
+        admin = User.objects.create_user("admin1", password="pw")
+        profile = AdminProfile.objects.create(user=admin)
+        profile.signature = "admin_signatures/fake.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+            returned_by=admin, host_signature="host_signatures/fake.png",
+        )
+        path = _resolve_staff_signature_path(visitor)
+        self.assertIn("host_signatures", path)
+
+
+class ConfirmGuestListTests(KioskRoutingTestCase):
+    def test_lists_approved_present_unsigned_visitor(self):
+        visitor = Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Anna")
+
+    def test_excludes_unapproved_visitor(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=False,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+    def test_excludes_already_signed_visitor(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+            host_signature="host_signatures/fake.png",
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+    def test_excludes_visitor_who_already_left(self):
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+            end_time=timezone.now(),
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+
+class ConfirmGuestSignatureTests(KioskRoutingTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp(prefix="recevio-test-media-")
+        cls._media_root_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_root_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_root_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.visitor = Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+
+    def test_post_saves_host_signature(self):
+        resp = self.client.post(
+            reverse("confirm_guest_signature", args=[self.visitor.pk]),
+            {"signature_data": "data:image/png;base64,eA=="},
+        )
+        self.assertRedirects(resp, reverse("confirm_guest_list"))
+        self.visitor.refresh_from_db()
+        self.assertTrue(self.visitor.host_signature)
+        self.assertIsNotNone(self.visitor.host_signed_at)
+
+    def test_signed_visitor_disappears_from_the_list(self):
+        self.client.post(
+            reverse("confirm_guest_signature", args=[self.visitor.pk]),
+            {"signature_data": "data:image/png;base64,eA=="},
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertNotContains(response, "Anna")
+
+
+class PendingApprovalsMarksSeenTests(KioskRoutingTestCase):
+    def test_visiting_pending_approvals_updates_notifications_seen_at(self):
+        staff = _make_helpdesk_user()
+        profile, _ = AdminProfile.objects.get_or_create(user=staff)
+        self.assertIsNone(profile.notifications_seen_at)
+        self.client.force_login(staff)
+
+        self.client.get(reverse("pending_approvals"))
+
+        profile.refresh_from_db()
+        self.assertIsNotNone(profile.notifications_seen_at)
+
+    def test_count_drops_to_zero_after_visiting_pending_approvals(self):
+        staff = _make_helpdesk_user()
+        self.client.force_login(staff)
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=False,
+        )
+        self.assertEqual(self.client.get(reverse("notifications_status")).json()["count"], 1)
+
+        self.client.get(reverse("pending_approvals"))
+
+        self.assertEqual(self.client.get(reverse("notifications_status")).json()["count"], 0)
+
+
+class NormalizeHostPhoneTests(TestCase):
+    """Host.phone is max_length=9 — Excel stores phone numbers as a number
+    with the '48' country-code prefix, e.g. 48668376832 (read back as an
+    11-digit string), which overflowed the column and crashed host_import."""
+
+    def test_strips_48_country_code_prefix(self):
+        self.assertEqual(_normalize_host_phone("48668376832"), "668376832")
+
+    def test_strips_plus_48_and_separators(self):
+        self.assertEqual(_normalize_host_phone("+48 668-376-832"), "668376832")
+
+    def test_leaves_plain_9_digit_number_untouched(self):
+        self.assertEqual(_normalize_host_phone("668376832"), "668376832")
+
+    def test_truncates_to_last_9_digits_if_still_too_long(self):
+        self.assertEqual(len(_normalize_host_phone("1234567890123")), 9)
+
+
+class HostImportTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def _upload_xlsx(self, rows):
+        wb = openpyxl.Workbook()
+        sheet = wb.active
+        sheet.append(["ImieNazwisko", "Telefon", "Email"])
+        for row in rows:
+            sheet.append(row)
+        stream = BytesIO()
+        wb.save(stream)
+        stream.seek(0)
+        return SimpleUploadedFile(
+            "hosts.xlsx", stream.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+
+    def test_import_normalizes_phone_with_country_code(self):
+        upload = self._upload_xlsx([["Jan Kowalski", 48668376832, "jan.kowalski@brueggen.com"]])
+        resp = self.client.post(reverse("host_import"), {"file": upload})
+        self.assertEqual(resp.status_code, 302)
+        host = Host.objects.get(host_name="Jan Kowalski")
+        self.assertEqual(host.phone, "668376832")
+        self.assertEqual(host.email, "jan.kowalski@brueggen.com")

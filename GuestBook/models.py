@@ -85,6 +85,13 @@ class Visitor(models.Model):
     print_status = models.CharField(max_length=16, choices=PRINT_CHOICES, default="pending")
     id_issued = models.BooleanField(default=False)  # czy karta została wydana przez recepcję
 
+    # Confirmation by the visitor's host that they received the guest at
+    # reception — captured on the kiosk's "Confirm guest" screen, separate
+    # from `signed` (the visitor's own signature) and from `returned_by`/
+    # `badge_returned` (the unrelated exit/badge-return flow).
+    host_signature = models.ImageField(upload_to='host_signatures/', blank=True, null=True)
+    host_signed_at = models.DateTimeField(null=True, blank=True)
+
     def is_present(self):
         return self.end_time is None or not self.badge_returned
 

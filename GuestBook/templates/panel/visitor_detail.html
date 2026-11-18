@@ -133,6 +133,14 @@
                 <span class="text-muted">No signature provided</span>
               {% endif %}
             </li>
+            <li class="list-group-item"><strong>Guest received by:</strong><br>
+              {% if guest.host_signature %}
+                <img src="{{ guest.host_signature.url }}" alt="Host Signature" class="img-fluid mt-2" style="max-width: 300px;"><br>
+                <span class="text-muted small">Confirmed {{ guest.host_signed_at|date:"d.m.Y H:i" }}</span>
+              {% else %}
+                <span class="text-muted">Not yet confirmed</span>
+              {% endif %}
+            </li>
               {% if guest.badge_returned and guest.returned_by.adminprofile.signature %}
                 <li class="list-group-item">
                 <strong>Confirmed Return By:</strong><br>

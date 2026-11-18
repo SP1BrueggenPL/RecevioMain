@@ -21,8 +21,6 @@
     <th>Visitor ID</th>
     <th>Company</th>
     <th>Registered</th>
-    <th>Send</th>
-    <th>Print</th>
     <th>Action</th>
   </tr>
 </thead>
@@ -41,34 +39,6 @@
         {% endif %}
       </td>
       <td>{{ visitor.start_time|date:"d.m.Y H:i" }}</td>
-
-      <td>
-        {% if visitor.sms_status == "sent" %}
-          <span class="badge bg-success">OK</span>
-        {% elif visitor.sms_status == "timeout" %}
-          <span class="badge bg-warning text-dark">Timeout</span>
-        {% elif visitor.sms_status == "error" %}
-          <span class="badge bg-danger">Error</span>
-        {% elif visitor.sms_status == "skipped" %}
-          <span class="badge bg-secondary">Skipped</span>
-        {% else %}
-          <span class="badge bg-light text-dark">Pending</span>
-        {% endif %}
-      </td>
-
-      <td>
-        {% if visitor.print_status == "printed" %}
-          <span class="badge bg-success">OK</span>
-        {% elif visitor.print_status == "timeout" %}
-          <span class="badge bg-warning text-dark">Timeout</span>
-        {% elif visitor.print_status == "error" %}
-          <span class="badge bg-danger">Error</span>
-        {% elif visitor.print_status == "skipped" %}
-          <span class="badge bg-secondary">Skipped</span>
-        {% else %}
-          <span class="badge bg-light text-dark">Pending</span>
-        {% endif %}
-      </td>
 
       <td>
         <a href="{% url 'approve_visitor' visitor.pk %}" class="btn btn-primary btn-sm">Review</a>

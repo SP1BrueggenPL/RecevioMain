@@ -135,8 +135,8 @@
               </li>
             {% endif %}
 
-            {# ——— Reservation: own top-bar item, done by reception ——— #}
-            {% if user|has_group:"Recevio_Reception" or user|has_group:"Recevio_Helpdesk" %}
+            {# ——— Reservation: own top-bar item, gated on its own group ——— #}
+            {% if user|has_group:"Recevio_Reservation" %}
               <li class="nav-item">
                 <a class="nav-link" href="{% url 'reservation_code_create' %}">Reservation</a>
               </li>
@@ -193,7 +193,6 @@
   (function () {
     const badge = document.getElementById('notifications-badge');
     const text = document.getElementById('notifications-text');
-    const bellDropdown = document.getElementById('notificationsDropdown');
 
     function refresh() {
       fetch("{% url 'notifications_status' %}")
@@ -211,13 +210,6 @@
         })
         .catch(() => {});
     }
-
-    bellDropdown.addEventListener('shown.bs.dropdown', function () {
-      fetch("{% url 'notifications_mark_seen' %}", {
-        method: 'POST',
-        headers: { 'X-CSRFToken': '{{ csrf_token }}' },
-      }).then(refresh).catch(() => {});
-    });
 
     refresh();
     setInterval(refresh, 20000);

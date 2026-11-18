@@ -46,6 +46,8 @@ urlpatterns = [
     path('kiosk/exit/', views.exit_badge_view, name='exit_badge'),
     path("kiosk/exit/done/<str:visitor_id>/", views.exit_done_view, name="exit_done"),
     path('kiosk/settings/', views.kiosk_settings_save, name='kiosk_settings_save'),
+    path('kiosk/confirm-guest/', views.confirm_guest_list_view, name='confirm_guest_list'),
+    path('kiosk/confirm-guest/<int:pk>/sign/', views.confirm_guest_signature_view, name='confirm_guest_signature'),
 
     path('panel/', views.dashboard, name='dashboard'),
     path('guest/<int:pk>/', views.visitor_detail, name='visitor_detail'),
