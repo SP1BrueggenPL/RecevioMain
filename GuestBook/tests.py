@@ -1111,6 +1111,29 @@ class ConfirmGuestListTests(KioskRoutingTestCase):
         response = self.client.get(reverse("confirm_guest_list"))
         self.assertNotContains(response, "Anna")
 
+    def test_list_is_sorted_alphabetically_by_first_name(self):
+        Visitor.objects.create(
+            first_name="Zbigniew", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        Visitor.objects.create(
+            first_name="Anna", last_name="Kowalski", visit_purpose="",
+            visitor_id="002", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        content = response.content.decode()
+        self.assertLess(content.index("Anna"), content.index("Zbigniew"))
+
+    def test_search_input_carries_a_lowercase_name_for_each_row(self):
+        """The template filters client-side on `data-name` — confirm it's
+        actually emitted (lowercased) for the JS to match against."""
+        Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.get(reverse("confirm_guest_list"))
+        self.assertContains(response, 'data-name="anna nowak"')
+
 
 class ConfirmGuestSignatureTests(KioskRoutingTestCase):
     @classmethod

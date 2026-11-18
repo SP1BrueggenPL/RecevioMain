@@ -4,14 +4,28 @@
 {% block content %}
 <div style="width: 700px; max-width: 95vw; margin: auto; padding: 3rem; text-align: center; background-color: rgba(255, 255, 255, 0.9); border-radius: 15px;">
   <h1 style="font-size: 2.3rem; margin-bottom: 1.5rem;">{% trans "Confirm guest" %}</h1>
-  <p style="font-size: 1.2rem; color: #514b51; margin-bottom: 2rem;">
+  <p style="font-size: 1.2rem; color: #514b51; margin-bottom: 1.5rem;">
     {% trans "Select your guest below and sign to confirm you've received them." %}
   </p>
 
+  <input type="text" id="guest-search" class="kb-alpha"
+         placeholder="{% trans 'Search by first or last name' %}"
+         style="
+           width: 100%;
+           margin-bottom: 1.5rem;
+           padding: 1rem 1.2rem;
+           font-size: 1.3rem;
+           border: 1px solid #ccc;
+           border-radius: 10px;
+           box-sizing: border-box;
+         ">
+
   {% if visitors %}
-    <div style="text-align: left;">
+    <div id="guest-list" style="text-align: left;">
       {% for v in visitors %}
         <a href="{% url 'confirm_guest_signature' v.pk %}"
+           class="guest-row"
+           data-name="{{ v.first_name|lower }} {{ v.last_name|lower }}"
            style="
              display: flex;
              justify-content: space-between;
@@ -36,9 +50,31 @@
         </a>
       {% endfor %}
     </div>
+    <p id="guest-no-match" style="display:none; color: #777; font-size: 1.2rem;">
+      {% trans "No guest matches that name." %}
+    </p>
   {% else %}
     <p style="color: #777; font-size: 1.2rem;">{% trans "No guests waiting for confirmation." %}</p>
   {% endif %}
+
+  <script>
+    (function () {
+      var input = document.getElementById('guest-search');
+      var rows = document.querySelectorAll('.guest-row');
+      var noMatch = document.getElementById('guest-no-match');
+      if (!input) return;
+      input.addEventListener('input', function () {
+        var term = input.value.trim().toLowerCase();
+        var visibleCount = 0;
+        rows.forEach(function (row) {
+          var matches = row.dataset.name.indexOf(term) !== -1;
+          row.style.display = matches ? '' : 'none';
+          if (matches) visibleCount++;
+        });
+        if (noMatch) noMatch.style.display = (term && visibleCount === 0) ? '' : 'none';
+      });
+    })();
+  </script>
 
   <a href="{% url 'start' %}"
      style="

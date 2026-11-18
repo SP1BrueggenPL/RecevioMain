@@ -1244,11 +1244,13 @@ def exit_done_view(request, visitor_id=None):
 def confirm_guest_list_view(request):
     """Kiosk screen (public, same trust model as registration itself) where a
     visitor's host confirms they've received them. Lists approved visitors
-    still on-site who haven't been confirmed yet."""
+    still on-site who haven't been confirmed yet, alphabetically — the
+    template filters this list live by name as the host types, client-side,
+    so there's no page reload while the on-screen keyboard is open."""
     visitors = (Visitor.objects
                 .filter(approved=True, end_time__isnull=True, host_signature='')
                 .select_related('host', 'factory')
-                .order_by('-start_time'))
+                .order_by('first_name', 'last_name'))
     return render(request, 'kiosk/confirm_guest_list.html', {'visitors': visitors})
 
 
