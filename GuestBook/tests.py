@@ -1076,6 +1076,34 @@ class GenerateBhpPdfTests(TestCase):
         pdf_stream = generate_bhp_pdf(visitor)
         self.assertGreater(len(pdf_stream.getvalue()), 0)
 
+    def test_skips_missing_visitor_signature_file_instead_of_crashing(self):
+        """A visitor's signature row can reference a file that no longer
+        exists on disk (e.g. an upload that didn't survive a redeploy — see
+        MEDIA_ROOT in settings.py). generate_bhp_pdf must degrade gracefully
+        instead of raising FileNotFoundError."""
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, language="pl",
+            end_time=None,
+        )
+        visitor.signed = "signatures/does_not_exist.png"
+        visitor.save()
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
+
+    def test_skips_missing_staff_signature_file_instead_of_crashing(self):
+        approver = User.objects.create_user("approver_missing_sig", password="pw")
+        profile = AdminProfile.objects.create(user=approver)
+        profile.signature = "admin_signatures/does_not_exist.png"
+        profile.save(update_fields=["signature"])
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, language="pl",
+            end_time=None, approved_by=approver,
+        )
+        pdf_stream = generate_bhp_pdf(visitor)
+        self.assertGreater(len(pdf_stream.getvalue()), 0)
+
 
 class StaffSignatureResolutionTests(TestCase):
     """_resolve_staff_signature_path prefers the fresh host signature from
