@@ -21,7 +21,7 @@ from django.http import JsonResponse
 # from .sms_gateway import SMSGateway  # Replaced by email notifications
 from django.utils import timezone
 from django.conf import settings
-from django.http import HttpResponse
+from django.http import HttpResponse, Http404
 from django.db.models import Q
 from django.db.models import Case, When, Value, BooleanField
 from .models import TrustedVisitor
@@ -632,14 +632,12 @@ def signature_form(request, visitor_id):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
-        data = ContentFile(base64.b64decode(imgstr), name=f"{visitor_id}_signature.png")
-        path = default_storage.save(f'signatures/{data.name}', data)
 
         # Zaktualizuj istniejącego Visitora
         visitor = Visitor.objects.filter(visitor_id=visitor_id, end_time__isnull=True).order_by('-start_time').first()
         visitor.with_supervision = request.session.get('with_supervision', True)
         if visitor:
-            visitor.signed = path
+            visitor.signed = base64.b64decode(imgstr)
             visitor.save()
 
         return redirect('finish_registration', visitor_id=visitor_id)
@@ -952,8 +950,7 @@ def signature_trusted_view(request, visitor_id):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
-        data = ContentFile(base64.b64decode(imgstr), name=f"{visitor_id}_signature.png")
-        path = default_storage.save(f'signatures/{data.name}', data)
+        signed_bytes = base64.b64decode(imgstr)
 
         # Pobierz istniejącego Visitora (jeśli jest)
         manual_id = request.session.get('manual_visitor_id')
@@ -987,7 +984,7 @@ def signature_trusted_view(request, visitor_id):
                 return redirect('enter_badge')
 
         # Aktualizuj dane Visitora
-        visitor.signed = path
+        visitor.signed = signed_bytes
         visitor.with_supervision = False
         visitor.safety_acknowledged = request.session.get('safety_acknowledged', False)
         visitor.language = request.session.get(settings.LANGUAGE_COOKIE_NAME, 'pl')
@@ -1263,7 +1260,7 @@ def confirm_guest_list_view(request):
     template filters this list live by name as the host types, client-side,
     so there's no page reload while the on-screen keyboard is open."""
     visitors = (Visitor.objects
-                .filter(approved=True, end_time__isnull=True, host_signature='')
+                .filter(approved=True, end_time__isnull=True, host_signature=b'')
                 .select_related('host', 'factory')
                 .order_by('first_name', 'last_name'))
     return render(request, 'kiosk/confirm_guest_list.html', {'visitors': visitors})
@@ -1276,9 +1273,7 @@ def confirm_guest_signature_view(request, pk):
         data_url = request.POST.get('signature_data')
         if data_url:
             format, imgstr = data_url.split(';base64,')
-            data = ContentFile(base64.b64decode(imgstr), name=f"{visitor.visitor_id}_host_signature.png")
-            path = default_storage.save(f'host_signatures/{data.name}', data)
-            visitor.host_signature = path
+            visitor.host_signature = base64.b64decode(imgstr)
             visitor.host_signed_at = timezone.now()
             visitor.save(update_fields=['host_signature', 'host_signed_at'])
         return redirect('confirm_guest_list')
@@ -1350,9 +1345,11 @@ def signature_from_code_view(request):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
-        data = ContentFile(base64.b64decode(imgstr), name=f"RES-{reservation_id}_signature.png")
-        path = default_storage.save(f'signatures/{data.name}', data)
-        request.session['signature_path'] = path
+        # Keep the base64 payload itself in the session (decoded to bytes
+        # only once the Visitor row is actually written, in
+        # finalize_from_code_view) rather than writing it to disk — see
+        # Visitor.signed for why signatures live in the database now.
+        request.session['signature_b64'] = imgstr
 
         return redirect('finalize_from_code')  # 🔁 ZAWSZE do finalize
 
@@ -1424,30 +1421,12 @@ def _safe_visitor_id(reservation_pk: int) -> str:
     """3-znakowy identyfikator – np. modulo albo wycinek."""
     return str(reservation_pk)[-3:].zfill(3)
 
-def _has_meaningful_changes(visitor, reservation, signature_path, safety_answers):
-    """Zwraca True jeśli nowa finalizacja zmienia cokolwiek istotnego."""
-    if visitor.production_area != reservation.factory:
-        return True
-    if visitor.with_supervision != reservation.supervision:
-        return True
-    if (visitor.safety_question_1 or "") != (safety_answers.get("question_1") or ""):
-        return True
-    if (visitor.safety_question_2 or "") != (safety_answers.get("question_2") or ""):
-        return True
-    if (visitor.safety_question_3 or "") != (safety_answers.get("question_3") or ""):
-        return True
-    # jeżeli zmienił się podpis (inny plik/ścieżka) – też licz jako zmianę
-    if signature_path and str(visitor.signed) != str(signature_path):
-        return True
-    return False
-
-
 def finalize_from_code_view(request):
     reservation_id = request.session.get('reservation_id')
-    signature_path = request.session.get('signature_path')
+    signature_b64 = request.session.get('signature_b64')
     safety_answers = request.session.get('safety_answers', {})
 
-    if not reservation_id or not signature_path:
+    if not reservation_id or not signature_b64:
         return redirect('enter_code')
 
     reservation = Reservation.objects.filter(id=reservation_id).select_related('company', 'host').first()
@@ -1500,8 +1479,8 @@ def finalize_from_code_view(request):
             visitor.safety_question_1 = safety_answers.get("question_1")
             visitor.safety_question_2 = safety_answers.get("question_2")
             visitor.safety_question_3 = safety_answers.get("question_3")
-            if signature_path:
-                visitor.signed = signature_path
+            if signature_b64:
+                visitor.signed = base64.b64decode(signature_b64)
 
             visitor.print_status = 'pending'
             visitor.sms_status = 'pending'
@@ -1524,7 +1503,7 @@ def finalize_from_code_view(request):
         pass
 
         # Sprzątanie sesji
-    for key in ['reservation_id', 'signature_path', 'safety_answers', 'visitor_id']:
+    for key in ['reservation_id', 'signature_b64', 'safety_answers', 'visitor_id']:
         request.session.pop(key, None)
 
     return redirect('complete_code', reservation_id=reservation.id)
@@ -1681,9 +1660,7 @@ def signature_for_audit_view(request):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
-        data = ContentFile(base64.b64decode(imgstr), name=f"AUDIT-{request.session['audit_number']}_signature.png")
-        path = default_storage.save(f'signatures/{data.name}', data)
-        request.session['audit_signature_path'] = path
+        request.session['audit_signature_b64'] = imgstr
         return redirect('finalize_audit_continuation')
     return render(request, 'kiosk/signature_audit.html')
 
@@ -1696,8 +1673,8 @@ def finalize_audit_continuation_view(request):
     mode) for the badge/email/completion-screen logic instead of duplicating it."""
     audit_number = request.session.get('audit_number')
     visitor_id = request.session.get('audit_visitor_id')
-    signature_path = request.session.get('audit_signature_path')
-    if not audit_number or not visitor_id or not signature_path:
+    signature_b64 = request.session.get('audit_signature_b64')
+    if not audit_number or not visitor_id or not signature_b64:
         return redirect('enter_audit_number')
 
     original = Visitor.objects.filter(audit_number=audit_number).order_by('start_time').first()
@@ -1718,7 +1695,7 @@ def finalize_audit_continuation_view(request):
         production_area=original.production_area,
         with_supervision=original.with_supervision,
         safety_acknowledged=True,
-        signed=signature_path,
+        signed=base64.b64decode(signature_b64),
         language=lang,
         audit_start_date=original.audit_start_date,
         audit_end_date=original.audit_end_date,
@@ -1728,7 +1705,7 @@ def finalize_audit_continuation_view(request):
         safety_question_3=original.safety_question_3,
     )
 
-    for key in ['audit_number', 'audit_visitor_id', 'audit_signature_path']:
+    for key in ['audit_number', 'audit_visitor_id', 'audit_signature_b64']:
         request.session.pop(key, None)
     request.session['registration_mode'] = 'manual'
 
@@ -1915,7 +1892,8 @@ def profile_view(request):
                     )
                 else:
                     signature.seek(0)
-                    profile.signature = signature
+                    profile.signature = signature.read()
+                    profile.signature_content_type = f'image/{image_format.lower()}'
                     profile.save()
                     messages.success(request, 'Signature updated successfully.')
             else:
@@ -2167,6 +2145,39 @@ def visitor_detail(request, pk):
         "guest": guest,
         "visit_purpose_label": visit_purpose_label,
     })
+
+
+@login_required
+def visitor_signature_image(request, pk):
+    """Serves Visitor.signed (the visitor's own kiosk signature) straight
+    from the database — these are always PNGs produced by the signature
+    pad's canvas.toDataURL()."""
+    visitor = get_object_or_404(Visitor, pk=pk)
+    if not visitor.signed:
+        raise Http404("No signature on this visitor.")
+    return HttpResponse(bytes(visitor.signed), content_type='image/png')
+
+
+@login_required
+def visitor_host_signature_image(request, pk):
+    """Serves Visitor.host_signature (the 'Confirm guest' kiosk signature),
+    also always a PNG."""
+    visitor = get_object_or_404(Visitor, pk=pk)
+    if not visitor.host_signature:
+        raise Http404("No host signature on this visitor.")
+    return HttpResponse(bytes(visitor.host_signature), content_type='image/png')
+
+
+@login_required
+def admin_signature_image(request, pk):
+    """Serves AdminProfile.signature — unlike the two above, this is a
+    user-picked upload, so its content type is whatever was validated and
+    recorded at upload time (see profile_view)."""
+    profile = get_object_or_404(AdminProfile, pk=pk)
+    if not profile.signature:
+        raise Http404("No signature on this admin profile.")
+    content_type = profile.signature_content_type or 'image/png'
+    return HttpResponse(bytes(profile.signature), content_type=content_type)
 
 
 @login_required

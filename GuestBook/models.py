@@ -48,7 +48,12 @@ class Visitor(models.Model):
     production_area = models.BooleanField()
     with_supervision = models.BooleanField(default=True, blank=True)
     safety_acknowledged = models.BooleanField(default=False)
-    signed = models.ImageField(upload_to='signatures/')
+    # Raw PNG bytes (not a FileField) — stored directly in the database so
+    # it survives Azure App Service redeploys/restarts, which wipe anything
+    # written to the app's own ephemeral filesystem (see MEDIA_ROOT in
+    # settings.py). Always PNG: produced by the kiosk signature pad's
+    # canvas.toDataURL(), which defaults to image/png.
+    signed = models.BinaryField(default=b'', blank=True)
     start_time = models.DateTimeField(auto_now_add=True)
     end_time = models.DateTimeField(null=True, blank=True)
     audit_start_date = models.DateField(null=True, blank=True)
@@ -93,7 +98,8 @@ class Visitor(models.Model):
     # reception — captured on the kiosk's "Confirm guest" screen, separate
     # from `signed` (the visitor's own signature) and from `returned_by`/
     # `badge_returned` (the unrelated exit/badge-return flow).
-    host_signature = models.ImageField(upload_to='host_signatures/', blank=True, null=True)
+    # Raw PNG bytes — see `signed` above for why this isn't a FileField.
+    host_signature = models.BinaryField(default=b'', blank=True)
     host_signed_at = models.DateTimeField(null=True, blank=True)
 
     def is_present(self):
@@ -129,7 +135,11 @@ class AdminProfile(models.Model):
     first_name = models.CharField(max_length=100, default="-")
     last_name = models.CharField(max_length=100, default="-")
     email = models.EmailField(max_length=100, default="-")
-    signature = models.ImageField(upload_to='admin_signatures/', blank=True, null=True)
+    # Raw image bytes — see Visitor.signed for why this isn't a FileField.
+    # Unlike the kiosk signature pads, this one is a user-picked upload, so
+    # (unlike `signed`/`host_signature`) it isn't guaranteed to be PNG.
+    signature = models.BinaryField(default=b'', blank=True)
+    signature_content_type = models.CharField(max_length=50, blank=True, default='')
     phone_number = models.CharField(max_length=50, blank=True, null=True)
     printer_address = models.CharField(max_length=200, blank=True, default='10.30.40.150', verbose_name='Printer IP/hostname')
     printer_port = models.IntegerField(default=9100, verbose_name='Printer port')

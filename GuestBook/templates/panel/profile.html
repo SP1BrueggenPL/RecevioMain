@@ -26,7 +26,7 @@
             <div class="mb-3">
               <label for="signature" class="form-label"><strong>Signature</strong></label><br>
               {% if profile.signature %}
-                <img src="{{ profile.signature.url }}" alt="Signature" class="img-fluid mb-2" style="max-width:300px;"><br>
+                <img src="{% url 'admin_signature_image' profile.pk %}" alt="Signature" class="img-fluid mb-2" style="max-width:300px;"><br>
               {% else %}
                 <p class="text-muted">No signature provided</p>
               {% endif %}

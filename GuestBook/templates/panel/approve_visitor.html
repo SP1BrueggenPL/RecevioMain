@@ -73,7 +73,7 @@
             </li>
             <li class="list-group-item"><strong>Signature:</strong><br>
               {% if visitor.signed %}
-                <img src="{{ visitor.signed.url }}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
+                <img src="{% url 'visitor_signature_image' visitor.pk %}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
               {% else %}
                 <span class="text-muted">No signature provided</span>
               {% endif %}

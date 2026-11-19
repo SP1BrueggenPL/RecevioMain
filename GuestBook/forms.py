@@ -112,13 +112,6 @@ class VisitorForm(forms.ModelForm):
                 field.widget.attrs['class'] = (existing + ' kb-alpha').strip()
 
 
-class SignatureForm(forms.ModelForm):
-    class Meta:
-        model = Visitor
-        fields = ['signed']
-        labels = {
-            'signed': _('Signed'),
-        }
 
 class SafetyForm(forms.Form):
     accepted = forms.BooleanField(label="Zapoznałem/am się z zasadami BHP")
