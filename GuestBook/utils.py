@@ -1,7 +1,22 @@
 import fitz  # PyMuPDF
 from io import BytesIO
+import logging
 import os
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _insert_image_if_exists(page, rect, path):
+    """page.insert_image() raises FileNotFoundError for a path whose file is
+    gone (e.g. an upload that didn't survive a redeploy — see MEDIA_ROOT in
+    settings.py). A missing signature shouldn't crash the whole PDF; skip it
+    and leave that spot blank instead."""
+    if not path or not os.path.exists(path):
+        logger.warning("[BHP PDF] signature file missing, skipping: %s", path)
+        return
+    page.insert_image(rect, filename=path)
+
 
 def _resolve_staff_signature_path(visitor):
     """Signature stamped as 'Brüggen employee signature' on the BHP PDF.
@@ -36,10 +51,10 @@ def generate_bhp_pdf(visitor):
 
         # ✅ Podpis graficzny - visitor
         if visitor.signed:
-            page.insert_image(fitz.Rect(50, 750, 200, 800), filename=visitor.signed.path)
+            _insert_image_if_exists(page, fitz.Rect(50, 750, 200, 800), visitor.signed.path)
 
         # ✅ Podpis graficzny - staff
-        page.insert_image(fitz.Rect(320, 755, 470, 805), filename=staff_signature)
+        _insert_image_if_exists(page, fitz.Rect(320, 755, 470, 805), staff_signature)
 
     else:  # English
         page.insert_text((100, 720), f"{visitor.start_time.strftime('%d.%m.%Y')}", fontsize=font_size)
@@ -49,9 +64,9 @@ def generate_bhp_pdf(visitor):
         page.insert_text((290, 372), f"{visitor.safety_question_2 or '-'}", fontsize=font_size)
 
         if visitor.signed:
-            page.insert_image(fitz.Rect(95, 715, 245, 765), filename=visitor.signed.path)
+            _insert_image_if_exists(page, fitz.Rect(95, 715, 245, 765), visitor.signed.path)
 
-        page.insert_image(fitz.Rect(350, 730, 500, 780), filename=staff_signature)
+        _insert_image_if_exists(page, fitz.Rect(350, 730, 500, 780), staff_signature)
 
     pdf_stream = BytesIO()
     doc.save(pdf_stream)

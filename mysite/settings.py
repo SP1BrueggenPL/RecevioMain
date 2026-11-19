@@ -159,7 +159,11 @@ STORAGES = {
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# BASE_DIR on Azure App Service is a fresh /tmp/<build-id> directory on every
+# deploy/restart, so uploads saved under it (signatures, etc.) vanish the
+# next time the app redeploys. On Azure App Service set
+# MEDIA_ROOT_DIR=/home/media for persistence (same reasoning as DB_PATH above).
+MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT_DIR', str(BASE_DIR / 'media')))
 
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/panel/'
