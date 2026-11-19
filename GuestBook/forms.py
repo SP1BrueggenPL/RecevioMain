@@ -64,6 +64,13 @@ class VisitorForm(forms.ModelForm):
         label=_("I do not represent any company")
     )
 
+    host = forms.ModelChoiceField(
+        queryset=Host.objects.all(),
+        required=True,
+        label=_("Host"),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+    )
+
     class Meta:
         model = Visitor
         fields = ['first_name', 'last_name', 'phone', 'factory', 'host']

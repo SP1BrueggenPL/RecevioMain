@@ -245,3 +245,9 @@ msgstr "Twój numer audytu"
 
 msgid "Use it with Audit continuation on later days."
 msgstr "Użyj go z metodą \"Kontynuacja audytu\" w kolejnych dniach."
+
+msgid "Type to search for a host"
+msgstr "Wpisz, aby wyszukać przyjmującego"
+
+msgid "Please select a host."
+msgstr "Proszę wybrać przyjmującego."

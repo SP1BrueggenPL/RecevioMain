@@ -56,6 +56,12 @@
   <form method="post" autocomplete="off" style="font-size: 2rem; max-width: 800px; margin: auto; text-align: left;">
     {% csrf_token %}
 
+    {% if form.non_field_errors %}
+      <div style="background-color: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; font-size: 1.4rem; margin-bottom: 1.5rem;">
+        {% for error in form.non_field_errors %}{{ error }}<br>{% endfor %}
+      </div>
+    {% endif %}
+
     <b><label for="{{ form.first_name.id_for_label }}">{{ form.first_name.label }}</label></b><br>
     {{ form.first_name }}<br><br>
 
@@ -95,8 +101,31 @@
       {{ form.audit_end_date }}<br><br>
     </div>
 
-    <b><label for="{{ form.host.id_for_label }}">{{ form.host.label }}</label></b><br>
-    {{ form.host }}<br><br>
+    <b><label for="host-search">{{ form.host.label }}</label></b><br>
+    <input type="text" id="host-search" class="kb-alpha" autocomplete="off"
+           placeholder="{% trans 'Type to search for a host' %}">
+    <input type="hidden" name="host" id="id_host" value="{{ form.host.value|default_if_none:'' }}">
+    <div id="host-dropdown" style="
+        display: none;
+        max-height: 280px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+        border-radius: 10px;
+        margin-top: -5px;
+        margin-bottom: 10px;
+        background: #fff;
+    ">
+      {% for host in form.host.field.queryset %}
+        <div class="host-option" data-id="{{ host.pk }}" data-name="{{ host.host_name|lower }}"
+             style="padding: 15px; cursor: pointer; border-bottom: 1px solid #eee;">
+          {{ host.host_name }}
+        </div>
+      {% endfor %}
+    </div>
+    <div id="host-error" style="{% if not form.host.errors %}display:none; {% endif %}color:#721c24; font-size: 1.3rem; margin-top: -5px; margin-bottom: 10px;">
+      {% trans "Please select a host." %}
+    </div>
+    <br>
 
     <div style="text-align: center; margin-top: 2rem;">
       <input type="submit" value="{% trans 'Continue' %}"
@@ -142,9 +171,81 @@
     auditDatesWrapper.style.display = selected === "audit" ? "block" : "none";
   }
 
+  function selectHost(id, name) {
+    document.getElementById("id_host").value = id || "";
+    document.getElementById("host-search").value = name || "";
+    document.getElementById("host-dropdown").style.display = "none";
+    document.getElementById("host-error").style.display = "none";
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     const factorySelect = document.getElementById("id_factory");
-    const hostSelect = document.getElementById("id_host");
+    const hostSearch = document.getElementById("host-search");
+    const hostHidden = document.getElementById("id_host");
+    const hostDropdown = document.getElementById("host-dropdown");
+    const hostOptions = document.querySelectorAll(".host-option");
+    const hostForm = hostHidden.closest("form");
+
+    function filterHosts() {
+      // Typing again means the previous selection no longer stands until
+      // the visitor picks a (possibly new) match from the filtered list.
+      hostHidden.value = "";
+      const term = hostSearch.value.trim().toLowerCase();
+      hostOptions.forEach(function (opt) {
+        opt.style.display = opt.dataset.name.indexOf(term) !== -1 ? "" : "none";
+      });
+      hostDropdown.style.display = "block";
+    }
+
+    // Pre-fill the visible search box from the hidden field's initial value
+    // (a previously chosen host, redisplayed after another field failed validation).
+    if (hostHidden.value) {
+      hostOptions.forEach(function (opt) {
+        if (opt.dataset.id === hostHidden.value) {
+          hostSearch.value = opt.textContent.trim();
+        }
+      });
+    }
+
+    hostOptions.forEach(function (opt) {
+      opt.addEventListener("click", function () {
+        selectHost(opt.dataset.id, opt.textContent.trim());
+      });
+    });
+
+    hostSearch.addEventListener("focus", function () {
+      hostDropdown.style.display = "block";
+    });
+
+    // Physical keyboard / paste.
+    hostSearch.addEventListener("input", filterHosts);
+
+    // The on-screen virtual keyboard (_virtual_keyboard.html) types into
+    // .kb-alpha inputs without firing a native 'input' event, so the filter
+    // above never runs from a tap — hook it the same way the ID-entry
+    // screens do, re-filtering after every virtual keystroke on this field.
+    (function hookAlpha() {
+      if (typeof window.typeKey !== 'function') { requestAnimationFrame(hookAlpha); return; }
+      const orig = window.typeKey;
+      window.typeKey = function (k) {
+        orig(k);
+        if (window.activeInput === hostSearch) filterHosts();
+      };
+    })();
+
+    document.addEventListener("click", function (e) {
+      if (!hostDropdown.contains(e.target) && e.target !== hostSearch) {
+        hostDropdown.style.display = "none";
+      }
+    });
+
+    hostForm.addEventListener("submit", function (e) {
+      if (!hostHidden.value) {
+        e.preventDefault();
+        document.getElementById("host-error").style.display = "block";
+        hostSearch.focus();
+      }
+    });
 
     if (factorySelect) {
       factorySelect.addEventListener("change", handleCompanyChange);
@@ -158,12 +259,7 @@
           .then(response => response.json())
           .then(data => {
             if (data.host_id && data.host_name) {
-              for (let i = 0; i < hostSelect.options.length; i++) {
-                if (hostSelect.options[i].value == data.host_id) {
-                  hostSelect.selectedIndex = i;
-                  break;
-                }
-              }
+              selectHost(String(data.host_id), data.host_name);
             }
           })
           .catch(error => console.error('Error fetching host:', error));
