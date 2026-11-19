@@ -111,7 +111,7 @@
   <li class="list-group-item">
     <strong>Approved By:</strong> {{ guest.approved_by.first_name }} {{ guest.approved_by.last_name }}<br>
     {% if guest.approved_by.adminprofile.signature %}
-      <img src="{{ guest.approved_by.adminprofile.signature.url }}" alt="Approver Signature" class="img-fluid mt-2" style="max-width: 300px;">
+      <img src="{% url 'admin_signature_image' guest.approved_by.adminprofile.pk %}" alt="Approver Signature" class="img-fluid mt-2" style="max-width: 300px;">
     {% else %}
       <span class="text-muted small">No saved signature on this admin's profile yet.</span>
     {% endif %}
@@ -138,14 +138,14 @@
 
             <li class="list-group-item"><strong>Signature:</strong><br>
               {% if guest.signed %}
-                <img src="{{ guest.signed.url }}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
+                <img src="{% url 'visitor_signature_image' guest.pk %}" alt="Visitor Signature" class="img-fluid mt-2" style="max-width: 400px;">
               {% else %}
                 <span class="text-muted">No signature provided</span>
               {% endif %}
             </li>
             <li class="list-group-item"><strong>Guest received by:</strong><br>
               {% if guest.host_signature %}
-                <img src="{{ guest.host_signature.url }}" alt="Host Signature" class="img-fluid mt-2" style="max-width: 300px;"><br>
+                <img src="{% url 'visitor_host_signature_image' guest.pk %}" alt="Host Signature" class="img-fluid mt-2" style="max-width: 300px;"><br>
                 <span class="text-muted small">Confirmed {{ guest.host_signed_at|date:"d.m.Y H:i" }}</span>
               {% else %}
                 <span class="text-muted">Not yet confirmed</span>
@@ -155,7 +155,7 @@
                 <li class="list-group-item">
                 <strong>Confirmed Return By:</strong><br>
                 <p>{{ guest.returned_by.first_name }} {{ guest.returned_by.last_name }}</p>
-                <img src="{{ guest.returned_by.adminprofile.signature.url }}" alt="Admin Signature" class="img-fluid mt-2" style="max-width: 300px;">
+                <img src="{% url 'admin_signature_image' guest.returned_by.adminprofile.pk %}" alt="Admin Signature" class="img-fluid mt-2" style="max-width: 300px;">
                 </li>
               {% endif %}
           </ul>

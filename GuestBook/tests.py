@@ -1,3 +1,4 @@
+import os
 import shutil
 import tempfile
 from datetime import timedelta
@@ -37,7 +38,7 @@ from GuestBook.views import (
     _mark_package_issued,
     _normalize_host_phone,
 )
-from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_path
+from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_bytes
 
 
 class MatchMaskedNameLegalSuffixTests(TestCase):
@@ -1076,25 +1077,24 @@ class GenerateBhpPdfTests(TestCase):
         pdf_stream = generate_bhp_pdf(visitor)
         self.assertGreater(len(pdf_stream.getvalue()), 0)
 
-    def test_skips_missing_visitor_signature_file_instead_of_crashing(self):
-        """A visitor's signature row can reference a file that no longer
-        exists on disk (e.g. an upload that didn't survive a redeploy — see
-        MEDIA_ROOT in settings.py). generate_bhp_pdf must degrade gracefully
-        instead of raising FileNotFoundError."""
+    def test_skips_corrupt_visitor_signature_bytes_instead_of_crashing(self):
+        """Visitor.signed can in principle hold bytes fitz can't decode as
+        an image. generate_bhp_pdf must degrade gracefully instead of
+        raising."""
         visitor = Visitor.objects.create(
             first_name="Jan", last_name="Kowalski", visit_purpose="",
             visitor_id="001", production_area=False, language="pl",
             end_time=None,
         )
-        visitor.signed = "signatures/does_not_exist.png"
+        visitor.signed = b"not a real image"
         visitor.save()
         pdf_stream = generate_bhp_pdf(visitor)
         self.assertGreater(len(pdf_stream.getvalue()), 0)
 
-    def test_skips_missing_staff_signature_file_instead_of_crashing(self):
+    def test_skips_corrupt_staff_signature_bytes_instead_of_crashing(self):
         approver = User.objects.create_user("approver_missing_sig", password="pw")
         profile = AdminProfile.objects.create(user=approver)
-        profile.signature = "admin_signatures/does_not_exist.png"
+        profile.signature = b"not a real image"
         profile.save(update_fields=["signature"])
         visitor = Visitor.objects.create(
             first_name="Jan", last_name="Kowalski", visit_purpose="",
@@ -1106,7 +1106,7 @@ class GenerateBhpPdfTests(TestCase):
 
 
 class StaffSignatureResolutionTests(TestCase):
-    """_resolve_staff_signature_path prefers the fresh host signature from
+    """_resolve_staff_signature_bytes prefers the fresh host signature from
     the kiosk's Confirm guest screen over the old returned_by admin-profile
     signature, which in turn beats the generic default image."""
 
@@ -1115,31 +1115,32 @@ class StaffSignatureResolutionTests(TestCase):
             first_name="Jan", last_name="Kowalski", visit_purpose="",
             visitor_id="001", production_area=False,
         )
-        path = _resolve_staff_signature_path(visitor)
-        self.assertTrue(path.endswith("default_signature.png"))
+        default_path = os.path.join(settings.BASE_DIR, "GuestBook", "static", "images", "default_signature.png")
+        with open(default_path, "rb") as f:
+            expected = f.read()
+        self.assertEqual(_resolve_staff_signature_bytes(visitor), expected)
 
     def test_prefers_host_signature_over_returned_by(self):
         admin = User.objects.create_user("admin1", password="pw")
         profile = AdminProfile.objects.create(user=admin)
-        profile.signature = "admin_signatures/fake.png"
+        profile.signature = b"RETURNED_SIG"
         profile.save(update_fields=["signature"])
         visitor = Visitor.objects.create(
             first_name="Jan", last_name="Kowalski", visit_purpose="",
             visitor_id="001", production_area=False,
-            returned_by=admin, host_signature="host_signatures/fake.png",
+            returned_by=admin, host_signature=b"HOST_SIG",
         )
-        path = _resolve_staff_signature_path(visitor)
-        self.assertIn("host_signatures", path)
+        self.assertEqual(_resolve_staff_signature_bytes(visitor), b"HOST_SIG")
 
     def test_prefers_approved_by_over_returned_by(self):
         approver = User.objects.create_user("approver1", password="pw")
         approver_profile = AdminProfile.objects.create(user=approver)
-        approver_profile.signature = "admin_signatures/approver.png"
+        approver_profile.signature = b"APPROVER_SIG"
         approver_profile.save(update_fields=["signature"])
 
         returner = User.objects.create_user("returner1", password="pw")
         returner_profile = AdminProfile.objects.create(user=returner)
-        returner_profile.signature = "admin_signatures/returner.png"
+        returner_profile.signature = b"RETURNER_SIG"
         returner_profile.save(update_fields=["signature"])
 
         visitor = Visitor.objects.create(
@@ -1147,21 +1148,19 @@ class StaffSignatureResolutionTests(TestCase):
             visitor_id="001", production_area=False,
             approved_by=approver, returned_by=returner,
         )
-        path = _resolve_staff_signature_path(visitor)
-        self.assertIn("approver.png", path)
+        self.assertEqual(_resolve_staff_signature_bytes(visitor), b"APPROVER_SIG")
 
     def test_host_signature_still_wins_over_approved_by(self):
         approver = User.objects.create_user("approver2", password="pw")
         profile = AdminProfile.objects.create(user=approver)
-        profile.signature = "admin_signatures/approver.png"
+        profile.signature = b"APPROVER_SIG"
         profile.save(update_fields=["signature"])
         visitor = Visitor.objects.create(
             first_name="Jan", last_name="Kowalski", visit_purpose="",
             visitor_id="001", production_area=False,
-            approved_by=approver, host_signature="host_signatures/fake.png",
+            approved_by=approver, host_signature=b"HOST_SIG",
         )
-        path = _resolve_staff_signature_path(visitor)
-        self.assertIn("host_signatures", path)
+        self.assertEqual(_resolve_staff_signature_bytes(visitor), b"HOST_SIG")
 
 
 class ConfirmGuestListTests(KioskRoutingTestCase):
@@ -1186,7 +1185,7 @@ class ConfirmGuestListTests(KioskRoutingTestCase):
         Visitor.objects.create(
             first_name="Anna", last_name="Nowak", visit_purpose="",
             visitor_id="001", production_area=False, approved=True,
-            host_signature="host_signatures/fake.png",
+            host_signature=b"HOST_SIG",
         )
         response = self.client.get(reverse("confirm_guest_list"))
         self.assertNotContains(response, "Anna")
@@ -1372,7 +1371,7 @@ class VisitorDetailDisplayTests(KioskRoutingTestCase):
     def test_shows_approver_signature_when_present(self):
         approver = User.objects.create_user("approver3", password="pw")
         profile = AdminProfile.objects.create(user=approver)
-        profile.signature = "admin_signatures/approver.png"
+        profile.signature = b"APPROVER_SIG"
         profile.save(update_fields=["signature"])
         visitor = Visitor.objects.create(
             first_name="Jan", last_name="Kowalski", visit_purpose="",
@@ -1691,3 +1690,57 @@ class ProfileSignatureUploadTests(KioskRoutingTestCase):
         self.client.post(reverse("profile"), {"signature_submit": "1", "signature": upload})
         profile = AdminProfile.objects.get(user=self.user)
         self.assertFalse(profile.signature)
+
+
+class SignatureServingViewTests(KioskRoutingTestCase):
+    """Signatures are served straight from the database (see
+    Visitor.signed/host_signature and AdminProfile.signature) rather than
+    via MEDIA_URL, since the files themselves no longer exist anywhere."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def test_visitor_signature_image_returns_bytes(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, signed=b"PNGDATA",
+        )
+        response = self.client.get(reverse("visitor_signature_image", args=[visitor.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b"PNGDATA")
+        self.assertEqual(response["Content-Type"], "image/png")
+
+    def test_visitor_signature_image_404_when_absent(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("visitor_signature_image", args=[visitor.pk]))
+        self.assertEqual(response.status_code, 404)
+
+    def test_host_signature_image_returns_bytes(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, host_signature=b"HOSTDATA",
+        )
+        response = self.client.get(reverse("visitor_host_signature_image", args=[visitor.pk]))
+        self.assertEqual(response.content, b"HOSTDATA")
+
+    def test_admin_signature_image_uses_recorded_content_type(self):
+        admin = User.objects.create_user("sigserveadmin", password="pw")
+        profile = AdminProfile.objects.create(
+            user=admin, signature=b"JPEGDATA", signature_content_type="image/jpeg"
+        )
+        response = self.client.get(reverse("admin_signature_image", args=[profile.pk]))
+        self.assertEqual(response.content, b"JPEGDATA")
+        self.assertEqual(response["Content-Type"], "image/jpeg")
+
+    def test_signature_images_require_login(self):
+        self.client.logout()
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False, signed=b"PNGDATA",
+        )
+        response = self.client.get(reverse("visitor_signature_image", args=[visitor.pk]))
+        self.assertNotEqual(response.status_code, 200)

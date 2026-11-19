@@ -7,18 +7,21 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
-def _insert_image_if_exists(page, rect, path):
-    """page.insert_image() raises FileNotFoundError for a path whose file is
-    gone (e.g. an upload that didn't survive a redeploy — see MEDIA_ROOT in
-    settings.py). A missing signature shouldn't crash the whole PDF; skip it
-    and leave that spot blank instead."""
-    if not path or not os.path.exists(path):
-        logger.warning("[BHP PDF] signature file missing, skipping: %s", path)
+def _insert_image_bytes(page, rect, data):
+    """Inserts raw image bytes via fitz's in-memory stream= (no filesystem
+    involved at all — signatures live in the database, see Visitor.signed).
+    A missing/corrupt image shouldn't crash the whole PDF; skip it and
+    leave that spot blank instead."""
+    if not data:
+        logger.warning("[BHP PDF] signature image missing, skipping")
         return
-    page.insert_image(rect, filename=path)
+    try:
+        page.insert_image(rect, stream=data)
+    except Exception:
+        logger.warning("[BHP PDF] signature image could not be inserted, skipping")
 
 
-def _resolve_staff_signature_path(visitor):
+def _resolve_staff_signature_bytes(visitor):
     """Signature stamped as 'Brüggen employee signature' on the BHP PDF.
     Prefers the host's own fresh signature from the kiosk's 'Confirm guest'
     screen (captured at pickup, specific to this visit); then the saved
@@ -26,12 +29,17 @@ def _resolve_staff_signature_path(visitor):
     actually reviewed the safety answers); then the badge-return admin's
     saved profile signature; then a default image."""
     if visitor.host_signature:
-        return visitor.host_signature.path
+        return bytes(visitor.host_signature)
     if visitor.approved_by and hasattr(visitor.approved_by, "adminprofile") and visitor.approved_by.adminprofile.signature:
-        return visitor.approved_by.adminprofile.signature.path
+        return bytes(visitor.approved_by.adminprofile.signature)
     if visitor.returned_by and hasattr(visitor.returned_by, "adminprofile") and visitor.returned_by.adminprofile.signature:
-        return visitor.returned_by.adminprofile.signature.path
-    return os.path.join(settings.BASE_DIR, "GuestBook", "static", "images", "default_signature.png")
+        return bytes(visitor.returned_by.adminprofile.signature)
+    default_path = os.path.join(settings.BASE_DIR, "GuestBook", "static", "images", "default_signature.png")
+    try:
+        with open(default_path, "rb") as f:
+            return f.read()
+    except OSError:
+        return None
 
 
 def generate_bhp_pdf(visitor):
@@ -40,7 +48,7 @@ def generate_bhp_pdf(visitor):
     doc = fitz.open(template_path)
     page = doc[-1]
     font_size = 10
-    staff_signature = _resolve_staff_signature_path(visitor)
+    staff_signature = _resolve_staff_signature_bytes(visitor)
 
     if lang == 'pl':
         page.insert_text((100, 750), f"{visitor.start_time.strftime('%d.%m.%Y')}", fontsize=font_size)
@@ -51,10 +59,10 @@ def generate_bhp_pdf(visitor):
 
         # ✅ Podpis graficzny - visitor
         if visitor.signed:
-            _insert_image_if_exists(page, fitz.Rect(50, 750, 200, 800), visitor.signed.path)
+            _insert_image_bytes(page, fitz.Rect(50, 750, 200, 800), bytes(visitor.signed))
 
         # ✅ Podpis graficzny - staff
-        _insert_image_if_exists(page, fitz.Rect(320, 755, 470, 805), staff_signature)
+        _insert_image_bytes(page, fitz.Rect(320, 755, 470, 805), staff_signature)
 
     else:  # English
         page.insert_text((100, 720), f"{visitor.start_time.strftime('%d.%m.%Y')}", fontsize=font_size)
@@ -64,9 +72,9 @@ def generate_bhp_pdf(visitor):
         page.insert_text((290, 372), f"{visitor.safety_question_2 or '-'}", fontsize=font_size)
 
         if visitor.signed:
-            _insert_image_if_exists(page, fitz.Rect(95, 715, 245, 765), visitor.signed.path)
+            _insert_image_bytes(page, fitz.Rect(95, 715, 245, 765), bytes(visitor.signed))
 
-        _insert_image_if_exists(page, fitz.Rect(350, 730, 500, 780), staff_signature)
+        _insert_image_bytes(page, fitz.Rect(350, 730, 500, 780), staff_signature)
 
     pdf_stream = BytesIO()
     doc.save(pdf_stream)

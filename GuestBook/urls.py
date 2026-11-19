@@ -56,6 +56,9 @@ urlpatterns = [
 
     path('panel/', views.dashboard, name='dashboard'),
     path('guest/<int:pk>/', views.visitor_detail, name='visitor_detail'),
+    path('guest/<int:pk>/signature.png', views.visitor_signature_image, name='visitor_signature_image'),
+    path('guest/<int:pk>/host-signature.png', views.visitor_host_signature_image, name='visitor_host_signature_image'),
+    path('admin-profile/<int:pk>/signature.img', views.admin_signature_image, name='admin_signature_image'),
     path('generate_bhp_pdf/<int:pk>/', views.generate_bhp_pdf_view, name='generate_bhp_pdf'),
     path('nearby/', views.nearby_persons, name='nearby_persons'),
     path('return/<int:pk>/', views.mark_returned, name='mark_returned'),
