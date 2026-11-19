@@ -5,6 +5,7 @@ from io import BytesIO
 from unittest import mock
 
 import openpyxl
+from PIL import Image
 from django.conf import settings
 from django.contrib.auth.models import Group, User
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1551,3 +1552,114 @@ class AuditContinuationFlowTests(KioskRoutingTestCase):
         self.original.refresh_from_db()
         self.assertTrue(self.original.approved)
         self.assertEqual(self.original.visitor_id, '001')
+
+
+class ApproveVisitorDefaultTests(KioskRoutingTestCase):
+    def test_known_guest_select_defaults_to_unknown(self):
+        self.client.force_login(_make_helpdesk_user())
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("approve_visitor", args=[visitor.pk]))
+        content = response.content.decode()
+        unknown_idx = content.index('value="False"')
+        known_idx = content.index('value="True"')
+        self.assertLess(unknown_idx, known_idx, "'Unknown guest' should be the first <option>")
+        self.assertIn('value="False" selected', content)
+
+
+class HostOrderingTests(TestCase):
+    def test_hosts_are_returned_alphabetically(self):
+        Host.objects.create(host_name="Zenon", phone="123456789")
+        Host.objects.create(host_name="Anna", phone="123456789")
+        Host.objects.create(host_name="Marek", phone="123456789")
+        names = list(Host.objects.values_list("host_name", flat=True))
+        self.assertEqual(names, sorted(names))
+
+
+class VisitorFormHostRequiredTests(TestCase):
+    def test_host_is_required(self):
+        form = VisitorForm(data={
+            "first_name": "Jan", "last_name": "Kowalski", "phone": "123456789",
+            "no_company": "on", "visit_purpose_choice": "other", "other_purpose": "x",
+        })
+        self.assertFalse(form.is_valid())
+        self.assertIn("host", form.errors)
+
+    def test_valid_with_host_selected(self):
+        host = Host.objects.create(host_name="Anna", phone="123456789")
+        form = VisitorForm(data={
+            "first_name": "Jan", "last_name": "Kowalski", "phone": "123456789",
+            "no_company": "on", "visit_purpose_choice": "other", "other_purpose": "x",
+            "host": host.pk,
+        })
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class GuestFormHostComboboxTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.host = Host.objects.create(host_name="Anna Host", phone="123456789")
+
+    def _payload(self, **overrides):
+        payload = {
+            "first_name": "Jan", "last_name": "Kowalski", "phone": "123456789",
+            "no_company": "on", "visit_purpose_choice": "other", "other_purpose": "x",
+            "host": str(self.host.pk),
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_missing_host_blocks_submission_with_visible_error(self):
+        response = self.client.post(reverse("guest_form", args=["001"]), self._payload(host=""))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("host", response.context["form"].errors)
+        self.assertNotIn('id="host-error" style="display:none;', response.content.decode())
+
+    def test_valid_host_proceeds_to_next_step(self):
+        response = self.client.post(reverse("guest_form", args=["001"]), self._payload())
+        self.assertRedirects(response, reverse("safety_pdf_only", args=["001"]))
+
+    def test_hosts_render_sorted_alphabetically_in_combobox(self):
+        Host.objects.create(host_name="Zenon Host", phone="123456789")
+        response = self.client.get(reverse("guest_form", args=["001"]))
+        content = response.content.decode()
+        self.assertLess(content.index("Anna Host"), content.index("Zenon Host"))
+
+
+class ProfileSignatureUploadTests(KioskRoutingTestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._media_root = tempfile.mkdtemp(prefix="recevio-test-media-")
+        cls._media_root_override = override_settings(MEDIA_ROOT=cls._media_root)
+        cls._media_root_override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._media_root_override.disable()
+        shutil.rmtree(cls._media_root, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        super().setUp()
+        self.user = User.objects.create_user("sigupload", password="pw")
+        self.client.force_login(self.user)
+
+    def _png_bytes(self):
+        buf = BytesIO()
+        Image.new("RGB", (2, 2), color="white").save(buf, format="PNG")
+        return buf.getvalue()
+
+    def test_valid_png_is_saved(self):
+        upload = SimpleUploadedFile("sig.png", self._png_bytes(), content_type="image/png")
+        self.client.post(reverse("profile"), {"signature_submit": "1", "signature": upload})
+        profile = AdminProfile.objects.get(user=self.user)
+        self.assertTrue(profile.signature)
+
+    def test_non_image_file_is_rejected(self):
+        upload = SimpleUploadedFile("sig.heic", b"not a real image, just text bytes", content_type="image/heic")
+        self.client.post(reverse("profile"), {"signature_submit": "1", "signature": upload})
+        profile = AdminProfile.objects.get(user=self.user)
+        self.assertFalse(profile.signature)

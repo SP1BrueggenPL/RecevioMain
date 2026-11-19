@@ -1896,9 +1896,28 @@ def profile_view(request):
         if 'signature_submit' in request.POST:
             signature = request.FILES.get('signature')
             if signature:
-                profile.signature = signature
-                profile.save()
-                messages.success(request, 'Signature updated successfully.')
+                from PIL import Image
+                # Browsers only render the file if Pillow can decode it, so
+                # reject anything else up front (e.g. a HEIC photo straight
+                # off a phone camera) instead of silently saving a signature
+                # that then shows as a broken image everywhere it's used.
+                try:
+                    img = Image.open(signature)
+                    img.verify()
+                    image_format = img.format
+                except Exception:
+                    image_format = None
+                if image_format not in ('PNG', 'JPEG', 'GIF', 'WEBP'):
+                    messages.error(
+                        request,
+                        'Could not read the uploaded file as an image. '
+                        'Please upload a PNG or JPEG image.'
+                    )
+                else:
+                    signature.seek(0)
+                    profile.signature = signature
+                    profile.save()
+                    messages.success(request, 'Signature updated successfully.')
             else:
                 messages.error(request, 'No signature uploaded.')
 

@@ -17,6 +17,9 @@ class Host(models.Model):
     phone = models.CharField(max_length=9)
     email = models.EmailField(blank=True, default='')
 
+    class Meta:
+        ordering = ['host_name']
+
     def __str__(self):
         return self.host_name
 
