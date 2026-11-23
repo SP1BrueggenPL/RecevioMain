@@ -1744,3 +1744,32 @@ class SignatureServingViewTests(KioskRoutingTestCase):
         )
         response = self.client.get(reverse("visitor_signature_image", args=[visitor.pk]))
         self.assertNotEqual(response.status_code, 200)
+
+
+class KioskVirtualKeyboardFixTests(KioskRoutingTestCase):
+    """Regression guard for two kiosk bugs reported against the Host search
+    combobox: the on-screen keyboard never exposed which input was active
+    outside its own script (so per-field filter hooks like guest_form.html's
+    host search never ran), and a tap on a keyboard button bubbled up and
+    immediately re-closed any dropdown that keystroke had just opened."""
+
+    def test_virtual_keyboard_exposes_active_input_globally(self):
+        # base_kiosk.html includes _virtual_keyboard.html on every kiosk page.
+        response = self.client.get(reverse('choose_method'))
+        self.assertContains(response, 'window.activeInput = input')
+
+    def test_virtual_keyboard_scrolls_active_field_above_itself(self):
+        response = self.client.get(reverse('choose_method'))
+        self.assertContains(response, 'scrollActiveIntoView')
+
+    def test_host_search_dropdown_ignores_virtual_keyboard_clicks(self):
+        response = self.client.get(reverse('guest_form', args=['001']))
+        self.assertContains(response, "e.target.closest('#virtual-keyboard')")
+
+    def test_guest_form_has_bottom_padding_for_keyboard_clearance(self):
+        response = self.client.get(reverse('guest_form', args=['001']))
+        self.assertContains(response, 'padding-bottom: 50vh')
+
+    def test_confirm_guest_search_hooks_virtual_keyboard(self):
+        response = self.client.get(reverse('confirm_guest_list'))
+        self.assertContains(response, "window.typeKey = function (k)")
