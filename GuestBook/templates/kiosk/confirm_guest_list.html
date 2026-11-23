@@ -63,7 +63,8 @@
       var rows = document.querySelectorAll('.guest-row');
       var noMatch = document.getElementById('guest-no-match');
       if (!input) return;
-      input.addEventListener('input', function () {
+
+      function filterGuests() {
         var term = input.value.trim().toLowerCase();
         var visibleCount = 0;
         rows.forEach(function (row) {
@@ -72,7 +73,24 @@
           if (matches) visibleCount++;
         });
         if (noMatch) noMatch.style.display = (term && visibleCount === 0) ? '' : 'none';
-      });
+      }
+
+      // Physical keyboard / paste.
+      input.addEventListener('input', filterGuests);
+
+      // The on-screen virtual keyboard (_virtual_keyboard.html) types into
+      // .kb-alpha inputs without firing a native 'input' event — on a
+      // touchscreen kiosk with no physical keyboard that meant this filter
+      // never ran at all. Hook it the same way guest_form.html's host
+      // search does, re-filtering after every virtual keystroke.
+      (function hookAlpha() {
+        if (typeof window.typeKey !== 'function') { requestAnimationFrame(hookAlpha); return; }
+        var orig = window.typeKey;
+        window.typeKey = function (k) {
+          orig(k);
+          if (window.activeInput === input) filterGuests();
+        };
+      })();
     })();
   </script>
 

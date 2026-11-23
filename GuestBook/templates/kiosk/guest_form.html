@@ -45,6 +45,7 @@
     height: calc(100vh - 180px);
     margin: auto;
     padding: 3rem;
+    padding-bottom: 50vh;
     text-align: center;
     overflow-y: auto;
     box-sizing: border-box;
@@ -234,6 +235,10 @@
     })();
 
     document.addEventListener("click", function (e) {
+      // A tap on the on-screen keyboard bubbles up to this listener too —
+      // without this check, every virtual keystroke immediately re-hid the
+      // dropdown right after filterHosts() had just shown it.
+      if (e.target.closest('#virtual-keyboard')) return;
       if (!hostDropdown.contains(e.target) && e.target !== hostSearch) {
         hostDropdown.style.display = "none";
       }

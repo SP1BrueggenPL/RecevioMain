@@ -193,10 +193,32 @@ scrim.addEventListener('pointerdown', hideBoth);
 keyboard.addEventListener('pointerdown', (e) => { if (e.target === keyboard) hideKeyboard(); });
 keyboardNum.addEventListener('pointerdown', (e) => { if (e.target === keyboardNum) hideKeyboardNum(); });
 
+/* ========= Przewinięcie aktywnego pola ponad klawiaturę =========
+   Klawiatura to overlay na sztywno przypięty do dołu (40vh) — pole, które
+   akurat jest w dolnej części długiego formularza, zostaje pod nim
+   całkowicie zasłonięte razem z tym co się pod nim wyświetla (np. lista
+   podpowiedzi). Przewiń je w górę, żeby zmieściło się nad klawiaturą. */
+function scrollActiveIntoView(el){
+  requestAnimationFrame(() => {
+    const rect = el.getBoundingClientRect();
+    const keyboardTop = window.innerHeight * 0.6; // klawiatura zasłania dolne 40vh
+    if (rect.bottom > keyboardTop) {
+      // 'start' (not 'center'): leaves the most room below the field for
+      // anything that renders under it, like guest_form.html's host dropdown.
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  });
+}
+
 /* ========= Podpinanie do pól =========
    TYLKO po kliknięciu (focus). Usuwamy hover/mouseenter. */
 document.querySelectorAll("input.kb-alpha, textarea.kb-alpha").forEach(input => {
-  input.addEventListener("focus", () => { activeInput = input; showKeyboard(); });
+  input.addEventListener("focus", () => {
+    activeInput = input;
+    window.activeInput = input; // widoczne też spoza tego skryptu (patrz hooki per-pole, np. guest_form.html)
+    showKeyboard();
+    scrollActiveIntoView(input);
+  });
 });
 document.querySelectorAll("input.kb-numeric").forEach(input => {
   // upewnij się, że atrybuty są ustawione
@@ -204,7 +226,12 @@ document.querySelectorAll("input.kb-numeric").forEach(input => {
   if (!input.hasAttribute('pattern'))   input.setAttribute('pattern','[0-9]{3}');
   input.setAttribute('inputmode','numeric');
 
-  input.addEventListener("focus", () => { activeInputNum = input; showKeyboardNum(); });
+  input.addEventListener("focus", () => {
+    activeInputNum = input;
+    window.activeInputNum = input;
+    showKeyboardNum();
+    scrollActiveIntoView(input);
+  });
 
   // twardy limit 3 cyfr również dla klawiatury fizycznej/wklejania
   input.addEventListener('input', function(){
