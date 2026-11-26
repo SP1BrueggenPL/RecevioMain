@@ -95,6 +95,12 @@ class VisitorForm(forms.ModelForm):
         if factory and other_company:
             cleaned_data['other_company'] = ""
 
+        visit_purpose_choice = cleaned_data.get('visit_purpose_choice')
+        if not visit_purpose_choice or visit_purpose_choice == '--- Select ---':
+            raise forms.ValidationError(_("Please select a purpose of visit."))
+        if visit_purpose_choice == 'other' and not cleaned_data.get('other_purpose'):
+            raise forms.ValidationError(_("Please enter the purpose of your visit."))
+
         return cleaned_data
 
     # Free-text fields that should trigger the kiosk's on-screen QWERTY keyboard

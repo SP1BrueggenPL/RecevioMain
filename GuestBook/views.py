@@ -12,7 +12,7 @@ from django.contrib.auth import get_user_model
 import base64
 import openpyxl
 from django.http import FileResponse
-from .utils import generate_bhp_pdf
+from .utils import generate_bhp_pdf, is_blank_signature
 from django.contrib.auth.decorators import user_passes_test
 from .task import schedule_recurring_tasks
 from django.contrib import auth
@@ -632,12 +632,18 @@ def signature_form(request, visitor_id):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
+        signed_bytes = base64.b64decode(imgstr)
+
+        if is_blank_signature(signed_bytes):
+            return render(request, 'kiosk/signature_form.html', {
+                'error': _("Please provide your signature before continuing."),
+            })
 
         # Zaktualizuj istniejącego Visitora
         visitor = Visitor.objects.filter(visitor_id=visitor_id, end_time__isnull=True).order_by('-start_time').first()
         visitor.with_supervision = request.session.get('with_supervision', True)
         if visitor:
-            visitor.signed = base64.b64decode(imgstr)
+            visitor.signed = signed_bytes
             visitor.save()
 
         return redirect('finish_registration', visitor_id=visitor_id)
@@ -951,6 +957,12 @@ def signature_trusted_view(request, visitor_id):
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
         signed_bytes = base64.b64decode(imgstr)
+
+        if is_blank_signature(signed_bytes):
+            return render(request, 'kiosk/signature_trusted.html', {
+                'visitor_id': visitor_id,
+                'error': _("Please provide your signature before continuing."),
+            })
 
         # Pobierz istniejącego Visitora (jeśli jest)
         manual_id = request.session.get('manual_visitor_id')
@@ -1273,7 +1285,13 @@ def confirm_guest_signature_view(request, pk):
         data_url = request.POST.get('signature_data')
         if data_url:
             format, imgstr = data_url.split(';base64,')
-            visitor.host_signature = base64.b64decode(imgstr)
+            host_signature_bytes = base64.b64decode(imgstr)
+            if is_blank_signature(host_signature_bytes):
+                return render(request, 'kiosk/confirm_guest_signature.html', {
+                    'visitor': visitor,
+                    'error': _("Please provide your signature before continuing."),
+                })
+            visitor.host_signature = host_signature_bytes
             visitor.host_signed_at = timezone.now()
             visitor.save(update_fields=['host_signature', 'host_signed_at'])
         return redirect('confirm_guest_list')
@@ -1345,6 +1363,13 @@ def signature_from_code_view(request):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
+
+        if is_blank_signature(base64.b64decode(imgstr)):
+            return render(request, 'kiosk/signature_from_code.html', {
+                'reservation': reservation,
+                'error': _("Please provide your signature before continuing."),
+            })
+
         # Keep the base64 payload itself in the session (decoded to bytes
         # only once the Visitor row is actually written, in
         # finalize_from_code_view) rather than writing it to disk — see
@@ -1660,6 +1685,12 @@ def signature_for_audit_view(request):
     if request.method == 'POST':
         data_url = request.POST.get('signature_data')
         format, imgstr = data_url.split(';base64,')
+
+        if is_blank_signature(base64.b64decode(imgstr)):
+            return render(request, 'kiosk/signature_audit.html', {
+                'error': _("Please provide your signature before continuing."),
+            })
+
         request.session['audit_signature_b64'] = imgstr
         return redirect('finalize_audit_continuation')
     return render(request, 'kiosk/signature_audit.html')

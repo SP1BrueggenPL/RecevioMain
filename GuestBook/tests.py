@@ -41,6 +41,20 @@ from GuestBook.views import (
 from GuestBook.utils import generate_bhp_pdf, _resolve_staff_signature_bytes
 
 
+def _non_blank_signature_data_url():
+    """A base64 PNG data URL with real (non-transparent) pixel content,
+    for POSTing to signature-pad views whose server-side validation now
+    rejects a visually blank canvas."""
+    import base64
+
+    image = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+    image.putpixel((5, 5), (0, 0, 0, 255))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = base64.b64encode(buffer.getvalue()).decode()
+    return f"data:image/png;base64,{encoded}"
+
+
 class MatchMaskedNameLegalSuffixTests(TestCase):
     def test_sa_and_spolka_akcyjna_are_the_same_sender(self):
         db_names = ["AB Spółka Akcyjna"]
@@ -465,7 +479,7 @@ class CodeRegistrationFlowTests(KioskRoutingTestCase):
         self.assertRedirects(resp, reverse("signature_from_code"))
 
         resp = c.post(reverse("signature_from_code"), {
-            "signature_data": "data:image/png;base64,eA==",
+            "signature_data": _non_blank_signature_data_url(),
         })
         # finalize_from_code is itself a process-and-redirect view (never
         # returns 200), so don't follow it here — just check where it points.
@@ -1247,7 +1261,7 @@ class ConfirmGuestSignatureTests(KioskRoutingTestCase):
     def test_post_saves_host_signature(self):
         resp = self.client.post(
             reverse("confirm_guest_signature", args=[self.visitor.pk]),
-            {"signature_data": "data:image/png;base64,eA=="},
+            {"signature_data": _non_blank_signature_data_url()},
         )
         self.assertRedirects(resp, reverse("confirm_guest_list"))
         self.visitor.refresh_from_db()
@@ -1257,7 +1271,7 @@ class ConfirmGuestSignatureTests(KioskRoutingTestCase):
     def test_signed_visitor_disappears_from_the_list(self):
         self.client.post(
             reverse("confirm_guest_signature", args=[self.visitor.pk]),
-            {"signature_data": "data:image/png;base64,eA=="},
+            {"signature_data": _non_blank_signature_data_url()},
         )
         response = self.client.get(reverse("confirm_guest_list"))
         self.assertNotContains(response, "Anna")
@@ -1548,7 +1562,7 @@ class AuditContinuationFlowTests(KioskRoutingTestCase):
         self.client.post(reverse('enter_visitor_id_for_audit'), {'visitor_id': new_id})
         return self.client.post(
             reverse('signature_for_audit'),
-            {'signature_data': 'data:image/png;base64,eA=='},
+            {'signature_data': _non_blank_signature_data_url()},
             follow=True,
         )
 
@@ -1773,3 +1787,146 @@ class KioskVirtualKeyboardFixTests(KioskRoutingTestCase):
     def test_confirm_guest_search_hooks_virtual_keyboard(self):
         response = self.client.get(reverse('confirm_guest_list'))
         self.assertContains(response, "window.typeKey = function (k)")
+
+
+class ApproveVisitorAuditNumberDisplayTests(KioskRoutingTestCase):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(_make_helpdesk_user())
+
+    def test_shows_audit_number_when_present(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="audit",
+            visitor_id="001", production_area=False, audit_number="ABC123",
+        )
+        response = self.client.get(reverse("approve_visitor", args=[visitor.pk]))
+        self.assertContains(response, "Audit Number")
+        self.assertContains(response, "ABC123")
+
+    def test_does_not_show_audit_number_row_when_absent(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.get(reverse("approve_visitor", args=[visitor.pk]))
+        self.assertNotContains(response, "Audit Number")
+
+
+class VisitorFormPurposeRequiredTests(TestCase):
+    def setUp(self):
+        self.host = Host.objects.create(host_name="Anna", phone="123456789")
+
+    def _payload(self, **overrides):
+        payload = {
+            "first_name": "Jan", "last_name": "Kowalski", "phone": "123456789",
+            "no_company": "on", "visit_purpose_choice": "Job interview",
+            "host": self.host.pk,
+        }
+        payload.update(overrides)
+        return payload
+
+    def test_purpose_is_required(self):
+        form = VisitorForm(data=self._payload(visit_purpose_choice=""))
+        self.assertFalse(form.is_valid())
+
+    def test_placeholder_value_is_rejected(self):
+        form = VisitorForm(data=self._payload(visit_purpose_choice="--- Select ---"))
+        self.assertFalse(form.is_valid())
+
+    def test_other_purpose_requires_free_text(self):
+        form = VisitorForm(data=self._payload(visit_purpose_choice="other", other_purpose=""))
+        self.assertFalse(form.is_valid())
+
+    def test_other_purpose_with_text_is_valid(self):
+        form = VisitorForm(data=self._payload(visit_purpose_choice="other", other_purpose="x"))
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_valid_with_known_purpose(self):
+        form = VisitorForm(data=self._payload())
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class GuestFormContinueButtonGatingTests(KioskRoutingTestCase):
+    def test_continue_button_starts_disabled(self):
+        response = self.client.get(reverse('guest_form', args=['001']))
+        self.assertContains(response, 'id="continue-btn"')
+        self.assertContains(response, 'disabled')
+
+    def test_update_continue_state_function_present(self):
+        response = self.client.get(reverse('guest_form', args=['001']))
+        self.assertContains(response, 'function updateContinueState')
+
+
+class BlankSignatureValidationTests(TestCase):
+    def test_empty_bytes_is_blank(self):
+        from GuestBook.utils import is_blank_signature
+        self.assertTrue(is_blank_signature(b""))
+
+    def test_garbage_bytes_is_blank(self):
+        from GuestBook.utils import is_blank_signature
+        self.assertTrue(is_blank_signature(b"not a real image"))
+
+    def test_transparent_png_is_blank(self):
+        from GuestBook.utils import is_blank_signature
+        buffer = BytesIO()
+        Image.new("RGBA", (10, 10), (0, 0, 0, 0)).save(buffer, format="PNG")
+        self.assertTrue(is_blank_signature(buffer.getvalue()))
+
+    def test_png_with_drawn_content_is_not_blank(self):
+        from GuestBook.utils import is_blank_signature
+        image = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+        image.putpixel((5, 5), (0, 0, 0, 255))
+        buffer = BytesIO()
+        image.save(buffer, format="PNG")
+        self.assertFalse(is_blank_signature(buffer.getvalue()))
+
+
+class SignatureViewsRejectBlankSignatureTests(KioskRoutingTestCase):
+    def _blank_signature_data_url(self):
+        import base64
+        buffer = BytesIO()
+        Image.new("RGBA", (10, 10), (0, 0, 0, 0)).save(buffer, format="PNG")
+        return f"data:image/png;base64,{base64.b64encode(buffer.getvalue()).decode()}"
+
+    def test_signature_form_rejects_blank_signature(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        response = self.client.post(
+            reverse("signature_form", args=[visitor.visitor_id]),
+            {"signature_data": self._blank_signature_data_url()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please provide your signature")
+        visitor.refresh_from_db()
+        self.assertFalse(visitor.signed)
+
+    def test_confirm_guest_signature_rejects_blank_signature(self):
+        visitor = Visitor.objects.create(
+            first_name="Anna", last_name="Nowak", visit_purpose="",
+            visitor_id="001", production_area=False, approved=True,
+        )
+        response = self.client.post(
+            reverse("confirm_guest_signature", args=[visitor.pk]),
+            {"signature_data": self._blank_signature_data_url()},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Please provide your signature")
+        visitor.refresh_from_db()
+        self.assertFalse(visitor.host_signature)
+
+
+class CompleteScreenLogoTests(KioskRoutingTestCase):
+    def test_logo_is_small_and_top_right(self):
+        visitor = Visitor.objects.create(
+            first_name="Jan", last_name="Kowalski", visit_purpose="",
+            visitor_id="001", production_area=False,
+        )
+        session = self.client.session
+        session['registration_mode'] = 'manual'
+        session.save()
+        response = self.client.get(reverse('finish_registration', args=[visitor.visitor_id]))
+        self.assertContains(response, 'max-height: 70px')
+        self.assertContains(response, 'right: 1rem')
+        self.assertNotContains(response, 'max-height:160px')
