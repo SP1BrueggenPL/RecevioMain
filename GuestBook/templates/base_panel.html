@@ -113,7 +113,7 @@
               </li>
             {% endif %}
             {# ——— HELPDESK: SupportCenter ——— #}
-            {% if user|has_group:"Recevio_Helpdesk" %}
+            {% if user|has_group:"Recevio_Helpdesk" or user|has_group:"Recevio_SupportCenter_Reception" %}
                       <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="supportDropdown" role="button"
                    data-bs-toggle="dropdown" aria-expanded="false">
@@ -122,15 +122,16 @@
                 <ul class="dropdown-menu" aria-labelledby="supportDropdown">
                   <li><a class="dropdown-item" href="{% url 'companies' %}">Companies</a></li>
                   <li><a class="dropdown-item" href="{% url 'hosts' %}">Hosts</a></li>
-                  <li><a class="dropdown-item" href="{% url 'trusted' %}">Trusted</a></li>
                     <li><a class="dropdown-item" href="{% url 'helpdesk_recipients' %}">Recipients</a></li>
+                  {% if user|has_group:"Recevio_Helpdesk" %}
+                  <li><a class="dropdown-item" href="{% url 'trusted' %}">Trusted</a></li>
                     <li><a class="dropdown-item" href="{% url 'helpdesk_senders' %}">Senders</a></li>
                     <li><a class="dropdown-item" href="{% url 'helpdesk_users' %}">Users</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="{% url 'test_email' %}">Test e-mail</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="{% url 'registration_methods_panel' %}">Registration methods</a></li>
-
+                  {% endif %}
                 </ul>
               </li>
             {% endif %}

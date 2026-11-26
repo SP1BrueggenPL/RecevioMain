@@ -18,6 +18,7 @@ from django.utils.translation import activate
 
 from GuestBook.models import (
     AdminProfile,
+    Company,
     CompletionScreenContent,
     Host,
     Package,
@@ -1915,6 +1916,116 @@ class SignatureViewsRejectBlankSignatureTests(KioskRoutingTestCase):
         self.assertContains(response, "Please provide your signature")
         visitor.refresh_from_db()
         self.assertFalse(visitor.host_signature)
+
+
+class SupportCenterReceptionGroupTests(KioskRoutingTestCase):
+    """Recevio_SupportCenter_Reception is a narrower grant than full
+    Helpdesk/SupportCenter: it may view/add/edit Hosts, Companies and
+    Recipients, but not delete them, and has no access to Senders/Users/etc."""
+
+    def setUp(self):
+        super().setUp()
+        self.reception_group, _ = Group.objects.get_or_create(
+            name="Recevio_SupportCenter_Reception"
+        )
+        self.reception_user = User.objects.create_user("reception1", password="pw")
+        self.reception_user.groups.add(self.reception_group)
+
+        self.helpdesk_group, _ = Group.objects.get_or_create(name="Recevio_Helpdesk")
+        self.helpdesk_user = User.objects.create_user("helpdesk1", password="pw")
+        self.helpdesk_user.groups.add(self.helpdesk_group)
+
+        self.plain_user = User.objects.create_user("plain1", password="pw")
+
+        self.host = Host.objects.create(host_name="Anna Host", phone="123456789")
+        self.company = Company.objects.create(company_name="Acme", host_name=self.host)
+
+    def test_reception_group_can_view_and_add_hosts(self):
+        self.client.force_login(self.reception_user)
+        self.assertEqual(self.client.get(reverse("hosts")).status_code, 200)
+        resp = self.client.post(reverse("host_add"), {
+            "host_name": "New Host", "phone": "111222333", "email": "",
+        })
+        self.assertRedirects(resp, reverse("hosts"))
+        self.assertTrue(Host.objects.filter(host_name="New Host").exists())
+
+    def test_reception_group_can_edit_hosts(self):
+        self.client.force_login(self.reception_user)
+        resp = self.client.post(reverse("host_edit", args=[self.host.pk]), {
+            "host_name": "Renamed Host", "phone": "123456789", "email": "",
+        })
+        self.assertRedirects(resp, reverse("hosts"))
+        self.host.refresh_from_db()
+        self.assertEqual(self.host.host_name, "Renamed Host")
+
+    def test_reception_group_cannot_delete_hosts(self):
+        self.client.force_login(self.reception_user)
+        self.client.post(reverse("host_delete", args=[self.host.pk]))
+        self.assertTrue(Host.objects.filter(pk=self.host.pk).exists())
+
+    def test_reception_group_can_view_and_add_companies(self):
+        self.client.force_login(self.reception_user)
+        self.assertEqual(self.client.get(reverse("companies")).status_code, 200)
+        resp = self.client.post(reverse("company_add"), {
+            "company_name": "NewCo", "host_name": str(self.host.pk),
+        })
+        self.assertRedirects(resp, reverse("companies"))
+        self.assertTrue(Company.objects.filter(company_name="NewCo").exists())
+
+    def test_reception_group_cannot_delete_companies(self):
+        self.client.force_login(self.reception_user)
+        self.client.post(reverse("company_delete", args=[self.company.pk]))
+        self.assertTrue(Company.objects.filter(pk=self.company.pk).exists())
+
+    def test_reception_group_can_view_and_add_recipients(self):
+        self.client.force_login(self.reception_user)
+        self.assertEqual(self.client.get(reverse("helpdesk_recipients")).status_code, 200)
+        resp = self.client.post(reverse("helpdesk_recipients"), {
+            "name": "New Recipient", "email": "", "phone": "",
+        })
+        self.assertRedirects(resp, reverse("helpdesk_recipients"))
+        self.assertTrue(Recipient.objects.filter(name="New Recipient").exists())
+
+    def test_reception_group_has_no_access_to_senders(self):
+        self.client.force_login(self.reception_user)
+        resp = self.client.get(reverse("helpdesk_senders"))
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_plain_user_without_group_is_blocked_from_hosts(self):
+        self.client.force_login(self.plain_user)
+        resp = self.client.get(reverse("hosts"))
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_plain_user_without_group_is_blocked_from_companies(self):
+        self.client.force_login(self.plain_user)
+        resp = self.client.get(reverse("companies"))
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_plain_user_without_group_is_blocked_from_recipients(self):
+        self.client.force_login(self.plain_user)
+        resp = self.client.get(reverse("helpdesk_recipients"))
+        self.assertNotEqual(resp.status_code, 200)
+
+    def test_full_helpdesk_can_still_delete_hosts_and_companies(self):
+        self.client.force_login(self.helpdesk_user)
+        self.client.post(reverse("host_delete", args=[self.host.pk]))
+        self.assertFalse(Host.objects.filter(pk=self.host.pk).exists())
+        self.client.post(reverse("company_delete", args=[self.company.pk]))
+        self.assertFalse(Company.objects.filter(pk=self.company.pk).exists())
+
+    def test_reception_group_sees_limited_support_center_menu(self):
+        self.client.force_login(self.reception_user)
+        response = self.client.get(reverse("hosts"))
+        self.assertContains(response, "SupportCenter")
+        self.assertContains(response, reverse("companies"))
+        self.assertContains(response, reverse("helpdesk_recipients"))
+        self.assertNotContains(response, reverse("helpdesk_senders"))
+        self.assertNotContains(response, reverse("helpdesk_users"))
+
+    def test_support_center_reception_group_is_assignable_on_users_page(self):
+        self.client.force_login(self.helpdesk_user)
+        response = self.client.get(reverse("helpdesk_user_edit", args=[self.reception_user.pk]))
+        self.assertContains(response, "Recevio_SupportCenter_Reception")
 
 
 class CompleteScreenLogoTests(KioskRoutingTestCase):

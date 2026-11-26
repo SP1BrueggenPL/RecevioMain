@@ -1,4 +1,5 @@
 {% extends "base_panel.html" %}
+{% load user_groups %}
 {% block content %}
 <section class="intro-single">
   <div class="container">
@@ -34,8 +35,10 @@
                   <td>{{ host.email|default:"-" }}</td>
                   <td>
                     <a href="{% url 'host_edit' host.id %}" class="btn btn-sm btn-primary">Edit</a>
+                    {% if user|has_group:"Recevio_Helpdesk" %}
                     <a href="{% url 'host_delete' host.id %}" class="btn btn-sm btn-danger"
                        onclick="return confirm('Are you sure you want to delete this host?')">Delete</a>
+                    {% endif %}
                   </td>
                 </tr>
               {% empty %}
