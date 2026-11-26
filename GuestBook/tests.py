@@ -1790,6 +1790,43 @@ class KioskVirtualKeyboardFixTests(KioskRoutingTestCase):
         self.assertContains(response, "window.typeKey = function (k)")
 
 
+class KioskVirtualKeyboardReliabilityTests(KioskRoutingTestCase):
+    """Regression guard for the reported "klawiatura się zacina" problem:
+    reproduced via Playwright as two concrete bugs — (1) after the idle
+    auto-hide timeout (or any other hide path) fired, the input kept DOM
+    focus, so re-clicking the SAME field never re-fired 'focus' and the
+    keyboard stayed hidden with no visible way to bring it back; (2) the
+    keyboard's fixed height:40vh with 80px buttons overflowed past the
+    bottom of the viewport on every tested screen size once a 5th row
+    (Polish diacritics) was added, making Enter/Space/Backspace unreachable.
+    Real interaction (click-to-reopen, overflow measurement, typing
+    diacritics) was verified with Playwright against a local dev server;
+    these are the server-rendered-content regression guards."""
+
+    def test_polish_diacritics_are_available(self):
+        response = self.client.get(reverse('choose_method'))
+        self.assertContains(response, 'ąćęłńóśźż')
+
+    def test_alpha_inputs_reopen_keyboard_on_pointerdown_not_just_focus(self):
+        # A plain 'focus' listener can't reopen the keyboard for a field that
+        # never lost DOM focus (only got visually hidden) — 'pointerdown'
+        # fires on every tap regardless of whether focus actually changes.
+        response = self.client.get(reverse('choose_method'))
+        self.assertContains(response, 'activateAlphaInput(input)')
+        self.assertContains(response, 'input.addEventListener("pointerdown", () => activateAlphaInput(input));')
+
+    def test_numeric_inputs_reopen_keyboard_on_pointerdown_not_just_focus(self):
+        response = self.client.get(reverse('choose_method'))
+        self.assertContains(response, 'activateNumericInput(input)')
+        self.assertContains(response, 'input.addEventListener("pointerdown", () => activateNumericInput(input));')
+
+    def test_keyboard_container_no_longer_uses_fixed_overflowing_height(self):
+        response = self.client.get(reverse('choose_method'))
+        self.assertNotContains(response, 'height: 40vh')
+        self.assertContains(response, 'max-height: 50vh')
+        self.assertContains(response, 'overflow-y: auto')
+
+
 class ApproveVisitorAuditNumberDisplayTests(KioskRoutingTestCase):
     def setUp(self):
         super().setUp()
