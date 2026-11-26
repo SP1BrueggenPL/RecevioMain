@@ -1,23 +1,33 @@
 <style>
-    /* Klawiatury wirtualne (wspoldzielone przez base_kiosk.html i base_kioskb.html) */
+    /* Klawiatury wirtualne (wspoldzielone przez base_kiosk.html i base_kioskb.html).
+       height:auto + max-height (zamiast sztywnego height) — z dodanym rzędem
+       polskich znaków robi się za dużo rzędów na sztywną wysokość: starsza
+       wersja z height:40vh i przyciskami 80px nachodziła dolnym rzędem poza
+       ekran na każdej testowanej rozdzielczości (przyciski Enter/Spacja/
+       Backspace stawały się nieklikalne — to wyglądało jak "zacinanie się"
+       klawiatury). overflow-y:auto to tylko siatka bezpieczeństwa na bardzo
+       niskich ekranach; przy normalnych rozdzielczościach kiosku całość i tak
+       mieści się bez przewijania. */
     .virtual-keyboard, .numeric-keyboard {
         display: none; position: fixed; bottom: 0; left: 0; right: 0;
-        background: #514b51; padding: 15px 10px; z-index: 9999; text-align: center;
-        height: 40vh; transform: translateY(100%); opacity: 0;
+        background: #514b51; padding: 10px 8px; z-index: 9999; text-align: center;
+        box-sizing: border-box;
+        height: auto; max-height: 50vh; overflow-y: auto;
+        transform: translateY(100%); opacity: 0;
         transition: transform 0.4s ease, opacity 0.4s ease;
     }
     .virtual-keyboard.active, .numeric-keyboard.active {
         display: block; transform: translateY(0); opacity: 1;
     }
 
-    .vk-row { display: flex; justify-content: center; margin-bottom: 8px; }
+    .vk-row { display: flex; justify-content: center; margin-bottom: 5px; }
     .vk-btn {
-        margin: 5px; padding: 0; font-size: 2.5rem; background: #e2bc54;
+        margin: 3px; padding: 0; font-size: 1.6rem; background: #e2bc54;
         border: none; border-radius: 10px; color: #000; cursor: pointer;
-        width: 80px; height: 80px; flex-shrink: 0;
+        width: 48px; height: 48px; flex-shrink: 0;
     }
     .vk-btn:hover { background: #d1a844; }
-    .vk-btn-wide { width: 200px; }
+    .vk-btn-wide { width: 130px; }
 
     /* Scrim pod klawiaturą */
     #kb-scrim{
@@ -48,7 +58,7 @@ let keyboardTimeout, keyboardNumTimeout;
 /* ========= Klawiatura QWERTY ========= */
 let isShift = false, isCaps = false;
 
-const rows = ["1234567890","qwertyuiop","asdfghjkl","zxcvbnm"];
+const rows = ["1234567890","qwertyuiop","asdfghjkl","zxcvbnm","ąćęłńóśźż"];
 
 function toggleShift(){ isShift = !isShift; refreshKeys(); }
 function toggleCaps(){  isCaps  = !isCaps;  refreshKeys(); }
@@ -194,14 +204,19 @@ keyboard.addEventListener('pointerdown', (e) => { if (e.target === keyboard) hid
 keyboardNum.addEventListener('pointerdown', (e) => { if (e.target === keyboardNum) hideKeyboardNum(); });
 
 /* ========= Przewinięcie aktywnego pola ponad klawiaturę =========
-   Klawiatura to overlay na sztywno przypięty do dołu (40vh) — pole, które
-   akurat jest w dolnej części długiego formularza, zostaje pod nim
-   całkowicie zasłonięte razem z tym co się pod nim wyświetla (np. lista
-   podpowiedzi). Przewiń je w górę, żeby zmieściło się nad klawiaturą. */
+   Klawiatura to overlay przypięty do dołu (max-height: 50vh — patrz CSS
+   powyżej) — pole, które akurat jest w dolnej części długiego formularza,
+   zostaje pod nim całkowicie zasłonięte razem z tym co się pod nim
+   wyświetla (np. lista podpowiedzi). Przewiń je w górę, żeby zmieściło się
+   nad klawiaturą. Używamy tu tego samego 50% co max-height w CSS — to
+   górny szacunek (klawiatura rzadko faktycznie go osiąga, bo większość
+   ekranów kiosku mieści wszystkie rzędy bez przewijania), więc ewentualne
+   nadmiarowe przewinięcie jest nieszkodliwe, w przeciwieństwie do
+   niedoszacowania, które chowałoby pole pod klawiaturą. */
 function scrollActiveIntoView(el){
   requestAnimationFrame(() => {
     const rect = el.getBoundingClientRect();
-    const keyboardTop = window.innerHeight * 0.6; // klawiatura zasłania dolne 40vh
+    const keyboardTop = window.innerHeight * 0.50; // 1 - 0.50 (patrz max-height w CSS)
     if (rect.bottom > keyboardTop) {
       // 'start' (not 'center'): leaves the most room below the field for
       // anything that renders under it, like guest_form.html's host dropdown.
@@ -211,27 +226,39 @@ function scrollActiveIntoView(el){
 }
 
 /* ========= Podpinanie do pól =========
-   TYLKO po kliknięciu (focus). Usuwamy hover/mouseenter. */
+   Zarówno na 'focus' JAK I na 'pointerdown': samo 'focus' nie wystarcza,
+   bo gdy klawiatura zniknie (timeout bezczynności, Enter, kliknięcie poza
+   nią) pole W DALSZYM CIĄGU ma fokus w DOM-ie — przeglądarka nie odpala
+   nowego zdarzenia 'focus' przy ponownym kliknięciu w TO SAMO, już
+   zogniskowane pole, więc klawiatura się nie pokazywała z powrotem.
+   Użytkownicy odkrywali obejście (kliknij inne pole, potem wróć) — to był
+   dokładnie zgłoszony problem "klawiatura się zacina". 'pointerdown' działa
+   zawsze, niezależnie od tego czy fokus faktycznie się zmienia. */
+function activateAlphaInput(input){
+  activeInput = input;
+  window.activeInput = input; // widoczne też spoza tego skryptu (patrz hooki per-pole, np. guest_form.html)
+  showKeyboard();
+  scrollActiveIntoView(input);
+}
 document.querySelectorAll("input.kb-alpha, textarea.kb-alpha").forEach(input => {
-  input.addEventListener("focus", () => {
-    activeInput = input;
-    window.activeInput = input; // widoczne też spoza tego skryptu (patrz hooki per-pole, np. guest_form.html)
-    showKeyboard();
-    scrollActiveIntoView(input);
-  });
+  input.addEventListener("focus", () => activateAlphaInput(input));
+  input.addEventListener("pointerdown", () => activateAlphaInput(input));
 });
+
+function activateNumericInput(input){
+  activeInputNum = input;
+  window.activeInputNum = input;
+  showKeyboardNum();
+  scrollActiveIntoView(input);
+}
 document.querySelectorAll("input.kb-numeric").forEach(input => {
   // upewnij się, że atrybuty są ustawione
   if (!input.hasAttribute('maxlength')) input.setAttribute('maxlength','3');
   if (!input.hasAttribute('pattern'))   input.setAttribute('pattern','[0-9]{3}');
   input.setAttribute('inputmode','numeric');
 
-  input.addEventListener("focus", () => {
-    activeInputNum = input;
-    window.activeInputNum = input;
-    showKeyboardNum();
-    scrollActiveIntoView(input);
-  });
+  input.addEventListener("focus", () => activateNumericInput(input));
+  input.addEventListener("pointerdown", () => activateNumericInput(input));
 
   // twardy limit 3 cyfr również dla klawiatury fizycznej/wklejania
   input.addEventListener('input', function(){
