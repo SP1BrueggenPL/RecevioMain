@@ -2619,6 +2619,9 @@ def approve_visitor(request, pk):
 
 @login_required
 def companies_view(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     query = request.GET.get("q", "")
     companies = Company.objects.select_related("host_name").all()
 
@@ -2636,6 +2639,9 @@ def companies_view(request):
 
 @login_required
 def company_add(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     hosts = Host.objects.all()
     if request.method == "POST":
         name = request.POST.get("company_name")
@@ -2649,6 +2655,9 @@ def company_add(request):
 
 @login_required
 def company_edit(request, pk):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     company = get_object_or_404(Company, pk=pk)
     hosts = Host.objects.all()
     if request.method == "POST":
@@ -2663,6 +2672,9 @@ def company_edit(request, pk):
 
 @login_required
 def company_delete(request, pk):
+    if not _can_helpdesk(request.user):
+        messages.error(request, "You do not have permission to do this.")
+        return redirect("dashboard")
     company = get_object_or_404(Company, pk=pk)
     company.delete()
     messages.success(request, "Company deleted successfully.")
@@ -2671,6 +2683,9 @@ def company_delete(request, pk):
 
 @login_required
 def company_import(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     if request.method == "POST" and request.FILES.get("file"):
         xlsx_file = request.FILES["file"]
         wb = openpyxl.load_workbook(xlsx_file)
@@ -2692,6 +2707,9 @@ def company_import(request):
 
 @login_required
 def hosts_view(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     query = request.GET.get("q", "")
     hosts = Host.objects.all()
     if query:
@@ -2703,6 +2721,9 @@ def hosts_view(request):
 
 @login_required
 def host_add(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     if request.method == "POST":
         Host.objects.create(
             host_name=request.POST.get("host_name"),
@@ -2716,6 +2737,9 @@ def host_add(request):
 
 @login_required
 def host_edit(request, pk):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     host = get_object_or_404(Host, pk=pk)
     if request.method == "POST":
         host.host_name = request.POST.get("host_name")
@@ -2729,6 +2753,9 @@ def host_edit(request, pk):
 
 @login_required
 def host_delete(request, pk):
+    if not _can_helpdesk(request.user):
+        messages.error(request, "You do not have permission to do this.")
+        return redirect("dashboard")
     host = get_object_or_404(Host, pk=pk)
     host.delete()
     messages.success(request, "Host deleted successfully.")
@@ -2749,6 +2776,9 @@ def _normalize_host_phone(raw: str) -> str:
 
 @login_required
 def host_import(request):
+    if not _can_manage_support_center_basics(request.user):
+        messages.error(request, "You do not have permission to view this page.")
+        return redirect("dashboard")
     if request.method == "POST" and request.FILES.get("file"):
         xlsx_file = request.FILES["file"]
         wb = openpyxl.load_workbook(xlsx_file)
@@ -3182,6 +3212,7 @@ ALLOWED_GROUPS = (
     "Recevio_Helpdesk",
     "Recevio_BoxFlow",
     "Recevio_Reservation",
+    "Recevio_SupportCenter_Reception",
 )
 
 def _require_helpdesk(user) -> bool:
@@ -3312,9 +3343,19 @@ def _can_issue_reservation_codes(user):
     # is granted explicitly per user via the Users page (ALLOWED_GROUPS).
     return user.is_authenticated and user.groups.filter(name="Recevio_Reservation").exists()
 
+def _can_manage_support_center_basics(user):
+    """Full Helpdesk/SupportCenter can always do this; Recevio_SupportCenter_Reception
+    is a narrower grant limited to Hosts, Companies and Recipients (add/edit only —
+    see _can_helpdesk for the delete-capable superset)."""
+    return _can_helpdesk(user) or (
+        user.is_authenticated
+        and user.groups.filter(name="Recevio_SupportCenter_Reception").exists()
+    )
+
 boxflow_required = user_passes_test(_can_boxflow)
 helpdesk_required = user_passes_test(_can_helpdesk)
 reservation_codes_required = user_passes_test(_can_issue_reservation_codes)
+support_center_basics_required = user_passes_test(_can_manage_support_center_basics)
 
 
 # --- AI Label Scan ---
@@ -4074,7 +4115,7 @@ def boxflow_reprint_label(request, pk):
 # ============ HELPDESK / SUPPORTCENTER ============
 
 @login_required
-@helpdesk_required
+@support_center_basics_required
 def helpdesk_recipients(request):
     if request.method == "POST":
         action = request.POST.get("action") or "create"
@@ -4290,7 +4331,7 @@ def helpdesk_import_senders(request):
 
 
 @login_required
-@helpdesk_required
+@support_center_basics_required
 def helpdesk_import_recipients(request):
     if request.method == "POST" and request.FILES.get("file"):
         f = request.FILES["file"]
