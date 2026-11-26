@@ -26,6 +26,11 @@
     transform: scale(2);
     margin-right: 15px;
   }
+
+  #continue-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
 </style>
 
 <div style="
@@ -129,7 +134,7 @@
     <br>
 
     <div style="text-align: center; margin-top: 2rem;">
-      <input type="submit" value="{% trans 'Continue' %}"
+      <input type="submit" id="continue-btn" value="{% trans 'Continue' %}" disabled
         style="
           width: 300px;
           height: 100px;
@@ -177,6 +182,34 @@
     document.getElementById("host-search").value = name || "";
     document.getElementById("host-dropdown").style.display = "none";
     document.getElementById("host-error").style.display = "none";
+    updateContinueState();
+  }
+
+  // Keeps the Continue button locked until a company, a purpose of visit,
+  // and a host have all actually been provided — not just validated after
+  // the fact on submit.
+  function updateContinueState() {
+    const continueBtn = document.getElementById("continue-btn");
+    if (!continueBtn) return;
+
+    const factorySelect = document.getElementById("id_factory");
+    const otherCompany = document.getElementById("id_other_company");
+    const noCompany = document.getElementById("id_no_company");
+    const purposeSelect = document.getElementById("id_visit_purpose_choice");
+    const otherPurpose = document.getElementById("id_other_purpose");
+    const hostHidden = document.getElementById("id_host");
+
+    const hasCompany = !!(factorySelect && factorySelect.value) ||
+                        !!(otherCompany && otherCompany.value.trim()) ||
+                        !!(noCompany && noCompany.checked);
+
+    const purposeVal = purposeSelect ? purposeSelect.value : "";
+    const purposeChosen = !!purposeVal && purposeVal !== "--- Select ---";
+    const purposeValid = purposeChosen && (purposeVal !== "other" || !!(otherPurpose && otherPurpose.value.trim()));
+
+    const hostValid = !!(hostHidden && hostHidden.value);
+
+    continueBtn.disabled = !(hasCompany && purposeValid && hostValid);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
@@ -196,6 +229,7 @@
         opt.style.display = opt.dataset.name.indexOf(term) !== -1 ? "" : "none";
       });
       hostDropdown.style.display = "block";
+      updateContinueState();
     }
 
     // Pre-fill the visible search box from the hidden field's initial value
@@ -231,6 +265,10 @@
       window.typeKey = function (k) {
         orig(k);
         if (window.activeInput === hostSearch) filterHosts();
+        // Other text fields (other_company, other_purpose) factor into the
+        // Continue button too, and typing into them via a tap has the same
+        // "no native input event" gap as the host search above.
+        updateContinueState();
       };
     })();
 
@@ -276,6 +314,22 @@
       purposeSelect.addEventListener("change", handleVisitPurposeChange);
       handleVisitPurposeChange();
     }
+
+    // Physical keyboard / paste / native change events on everything else
+    // the Continue button depends on.
+    [
+      factorySelect,
+      document.getElementById("id_other_company"),
+      document.getElementById("id_no_company"),
+      purposeSelect,
+      document.getElementById("id_other_purpose"),
+    ].forEach(function (el) {
+      if (!el) return;
+      el.addEventListener("input", updateContinueState);
+      el.addEventListener("change", updateContinueState);
+    });
+
+    updateContinueState();
   });
 </script>
 {% endblock %}

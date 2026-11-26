@@ -2,6 +2,9 @@
 {% load i18n static %}
 
 {% block content %}
+<style>
+  #finish-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+</style>
 <div style="
     position: fixed;
     top: 1rem;
@@ -20,6 +23,12 @@
   <p style="font-size: 1.4rem; margin-bottom: 2rem; color: #514b51;">
     {% trans "Sign below to confirm you've received your guest at reception." %}
   </p>
+
+  {% if error %}
+    <div style="background-color: #f8d7da; color: #721c24; padding: 1rem; border-radius: 8px; font-size: 1.4rem; margin-bottom: 1.5rem; display: inline-block;">
+      {{ error }}
+    </div>
+  {% endif %}
 
   <canvas id="signature-pad" width="900" height="300"
           style="border: 2px solid #ccc; border-radius: 8px; margin-bottom: 2rem;">
@@ -60,7 +69,7 @@
         ">
         <b>{% trans "Clear" %}</b>
       </button>
-      <button type="submit" onclick="saveSignature()"
+      <button type="submit" id="finish-btn" onclick="saveSignature()" disabled
         style="
           width: 300px;
           height: 100px;
@@ -83,7 +92,18 @@
 const canvas = document.getElementById("signature-pad");
 const ctx = canvas.getContext("2d");
 let drawing = false;
+let hasDrawn = false;
 canvas.style.touchAction = 'none';
+
+const finishBtn = document.getElementById("finish-btn");
+const signatureForm = canvas.closest("form");
+
+function markDrawn() {
+  if (!hasDrawn) {
+    hasDrawn = true;
+    if (finishBtn) finishBtn.disabled = false;
+  }
+}
 
 canvas.onmousedown = (e) => {
   drawing = true;
@@ -100,6 +120,7 @@ canvas.onmousemove = (e) => {
   const rect = canvas.getBoundingClientRect();
   ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
   ctx.stroke();
+  markDrawn();
 };
 
 function touchPos(e) {
@@ -122,6 +143,7 @@ canvas.addEventListener('touchmove', (e) => {
   const p = touchPos(e);
   ctx.lineTo(p.x, p.y);
   ctx.stroke();
+  markDrawn();
 }, { passive: false });
 
 canvas.addEventListener('touchend', (e) => {
@@ -136,6 +158,16 @@ function saveSignature() {
 function clearSignature() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   ctx.beginPath();
+  hasDrawn = false;
+  if (finishBtn) finishBtn.disabled = true;
+}
+
+// Defense in depth: block submission outright if somehow reached with
+// nothing drawn (e.g. a stale disabled state).
+if (signatureForm) {
+  signatureForm.addEventListener('submit', (e) => {
+    if (!hasDrawn) e.preventDefault();
+  });
 }
 </script>
 {% endblock %}

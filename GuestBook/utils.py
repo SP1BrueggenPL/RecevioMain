@@ -7,6 +7,19 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+def is_blank_signature(data: bytes) -> bool:
+    """True if `data` (raw PNG bytes from a kiosk signature pad) has
+    nothing actually drawn on it — just the canvas's own transparent
+    background, e.g. a Finish tap with no strokes."""
+    if not data:
+        return True
+    try:
+        from PIL import Image
+        return Image.open(BytesIO(data)).getbbox() is None
+    except Exception:
+        return True
+
+
 def _insert_image_bytes(page, rect, data):
     """Inserts raw image bytes via fitz's in-memory stream= (no filesystem
     involved at all — signatures live in the database, see Visitor.signed).
